@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import type { FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import './App.css'
 
 type Summary = {
@@ -47,26 +48,85 @@ function App() {
   const [summary, setSummary] = useState<Summary | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [token, setToken] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null
+    return window.localStorage.getItem('mcgfinances.token')
+  })
+  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login')
+  const [authForm, setAuthForm] = useState({
+    email: '',
+    password: '',
+    organizationName: '',
+  })
+  const [authError, setAuthError] = useState<string | null>(null)
+  const [authBusy, setAuthBusy] = useState(false)
+  const [profile, setProfile] = useState<{
+    user: { id: string; email: string }
+    organization: { id: string; name: string }
+  } | null>(null)
 
-  const summaryUrl = useMemo(() => {
-    const suffix = '/api/v1/summary'
-    const apiBase = resolveApiBase()
-    if (!apiBase) {
-      return suffix
+  const apiBaseMemo = useMemo(() => resolveApiBase(), [])
+
+  const buildUrl = useCallback(
+    (path: string) => {
+      const suffix = path.startsWith('/') ? path : `/${path}`
+      if (!apiBaseMemo) {
+        return suffix
+      }
+      try {
+        return new URL(suffix, `${apiBaseMemo}/`).toString()
+      } catch {
+        return `${apiBaseMemo}${suffix}`
+      }
+    },
+    [apiBaseMemo],
+  )
+
+  const loadProfile = useCallback(async () => {
+    if (!token) {
+      setProfile(null)
+      return
     }
     try {
-      return new URL(suffix, `${apiBase}/`).toString()
-    } catch {
-      return `${apiBase}${suffix}`
+      const res = await fetch(buildUrl('/api/v1/auth/me'), {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) {
+        throw new Error('The session expired, please sign in again.')
+      }
+      const data = (await res.json()) as {
+        user: { id: string; email: string }
+        organization: { id: string; name: string }
+      }
+      setProfile(data)
+    } catch (err) {
+      setToken(null)
+      window.localStorage.removeItem('mcgfinances.token')
+      setProfile(null)
+      setAuthError(
+        err instanceof Error ? err.message : 'Unable to load profile',
+      )
     }
-  }, [])
+  }, [buildUrl, token])
 
-  const loadSummary = async () => {
+  const loadSummary = useCallback(async () => {
+    if (!token) {
+      setSummary(null)
+      setLoading(false)
+      return
+    }
     try {
       setLoading(true)
       setError(null)
-      const response = await fetch(summaryUrl)
+      const response = await fetch(buildUrl('/api/v1/summary'), {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
       if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error('Session expired. Please login again.')
+        }
         throw new Error('Network response was not ok')
       }
       const data = (await response.json()) as Summary
@@ -77,12 +137,57 @@ function App() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [buildUrl, token])
 
   useEffect(() => {
+    loadProfile()
     loadSummary()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [loadProfile, loadSummary])
+
+  const handleAuthSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setAuthBusy(true)
+    setAuthError(null)
+    try {
+      const endpoint =
+        authMode === 'signup' ? '/api/v1/auth/signup' : '/api/v1/auth/login'
+      const payload =
+        authMode === 'signup'
+          ? authForm
+          : { email: authForm.email, password: authForm.password }
+      const response = await fetch(buildUrl(endpoint), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!response.ok) {
+        const details = await response.json().catch(() => ({}))
+        throw new Error(details.message || 'Unable to authenticate')
+      }
+      const data = (await response.json()) as {
+        token: string
+        user: { id: string; email: string }
+        organization: { id: string; name: string }
+      }
+      setToken(data.token)
+      window.localStorage.setItem('mcgfinances.token', data.token)
+      setProfile({ user: data.user, organization: data.organization })
+      setAuthForm({ email: '', password: '', organizationName: '' })
+      setAuthMode('login')
+      loadSummary()
+    } catch (err) {
+      setAuthError(err instanceof Error ? err.message : 'Unable to authenticate')
+    } finally {
+      setAuthBusy(false)
+    }
+  }
+
+  const handleLogout = () => {
+    setToken(null)
+    setProfile(null)
+    window.localStorage.removeItem('mcgfinances.token')
+    setSummary(null)
+  }
 
   const kpiCards = summary
     ? [
@@ -114,8 +219,21 @@ function App() {
             <span className="badge">Beta</span>
           </div>
           <div className="nav__actions">
-            <button className="ghost">Support</button>
-            <button className="primary">Add account</button>
+            {profile ? (
+              <>
+                <span className="pill">{profile.user.email}</span>
+                <button className="ghost" onClick={handleLogout}>
+                  Logout
+                </button>
+              </>
+            ) : (
+              <>
+                <button className="ghost">Support</button>
+                <button className="primary" onClick={() => setAuthMode('signup')}>
+                  Add account
+                </button>
+              </>
+            )}
           </div>
         </nav>
 
@@ -128,10 +246,86 @@ function App() {
               Perfect for founders and advisors on the move.
             </p>
           </div>
-          <button className="refresh" onClick={loadSummary} disabled={loading}>
-            {loading ? 'Refreshing…' : 'Refresh data'}
-          </button>
+          {profile && (
+            <button className="refresh" onClick={loadSummary} disabled={loading}>
+              {loading ? 'Refreshing…' : 'Refresh data'}
+            </button>
+          )}
         </header>
+
+        {!profile && (
+          <section className="auth-panel">
+            <div className="auth-tabs">
+              <button
+                className={authMode === 'login' ? 'active' : ''}
+                onClick={() => setAuthMode('login')}
+              >
+                Login
+              </button>
+              <button
+                className={authMode === 'signup' ? 'active' : ''}
+                onClick={() => setAuthMode('signup')}
+              >
+                Sign up
+              </button>
+            </div>
+            <form onSubmit={handleAuthSubmit} className="auth-form">
+              <label>
+                <span>Email</span>
+                <input
+                  type="email"
+                  value={authForm.email}
+                  onChange={(event) =>
+                    setAuthForm((prev) => ({
+                      ...prev,
+                      email: event.target.value,
+                    }))
+                  }
+                  required
+                />
+              </label>
+              <label>
+                <span>Password</span>
+                <input
+                  type="password"
+                  value={authForm.password}
+                  minLength={6}
+                  onChange={(event) =>
+                    setAuthForm((prev) => ({
+                      ...prev,
+                      password: event.target.value,
+                    }))
+                  }
+                  required
+                />
+              </label>
+              {authMode === 'signup' && (
+                <label>
+                  <span>Business name</span>
+                  <input
+                    type="text"
+                    value={authForm.organizationName}
+                    onChange={(event) =>
+                      setAuthForm((prev) => ({
+                        ...prev,
+                        organizationName: event.target.value,
+                      }))
+                    }
+                    required
+                  />
+                </label>
+              )}
+              {authError && <p className="auth-error">{authError}</p>}
+              <button className="primary" type="submit" disabled={authBusy}>
+                {authBusy
+                  ? 'One moment…'
+                  : authMode === 'signup'
+                  ? 'Create account'
+                  : 'Login'}
+              </button>
+            </form>
+          </section>
+        )}
 
         {error && (
           <div className="panel error">
@@ -139,7 +333,7 @@ function App() {
           </div>
         )}
 
-        {loading && !summary && !error && (
+        {loading && profile && !summary && !error && (
           <div className="panel loading">
             <div className="dots">
               <span />
@@ -150,7 +344,7 @@ function App() {
           </div>
         )}
 
-        {summary && (
+        {profile && summary && (
           <>
             <section className="kpis">
               {kpiCards.map((card) => (
@@ -215,13 +409,13 @@ function App() {
         )}
 
         <footer className="footer">
-          {summary ? (
+          {profile && summary ? (
             <p>
               Last updated {new Date(summary.updatedAt).toLocaleString()} ·
               synced nightly & on demand.
             </p>
           ) : (
-            <p>Connect your first bank account to unlock insights.</p>
+            <p>Create an account or log in to see your finance workspace.</p>
           )}
         </footer>
       </main>

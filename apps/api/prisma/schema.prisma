@@ -1,0 +1,44 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id           String        @id @default(cuid())
+  name         String
+  createdAt    DateTime      @default(now())
+  memberships  Membership[]
+  summary      Summary?
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  passwordHash String
+  createdAt    DateTime      @default(now())
+  memberships  Membership[]
+}
+
+model Membership {
+  id             String        @id @default(cuid())
+  role           String        @default("owner")
+  user           User          @relation(fields: [userId], references: [id])
+  userId         String
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+  organizationId String
+  createdAt      DateTime      @default(now())
+}
+
+model Summary {
+  id             String       @id @default(cuid())
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String       @unique
+  cashOnHand     Int          @default(0)
+  monthlyBurn    Int          @default(0)
+  runwayMonths   Float        @default(0)
+  updatedAt      DateTime     @updatedAt
+}

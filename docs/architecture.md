@@ -8,7 +8,6 @@
   - **Redis** (Render free instance) for caching dashboard aggregates and storing short-lived auth/session data.
   - **Object storage** (Render Static + S3-compatible bucket such as Cloudflare R2) for receipts and documents.
 - **Integrations**: Plaid/MX for bank feeds, OCR service (e.g., AWS Textract or OCR.space API), email ingestion via SendGrid Inbound Parse, and optional accounting exports (QuickBooks/Xero APIs).
-- **Background Jobs**: Hosted worker (Render background worker) processing webhooks, bank-sync polling, AI insights, and scheduled reports. Triggered via Redis queues (BullMQ).
 - **Observability**: Prometheus-compatible metrics (Render dashboard), structured logging (Winston + Logflare), and Sentry for error tracking.
 
 ## 2. Modules & Responsibilities
@@ -23,11 +22,10 @@
 
 ## 3. Deployment Topology
 - **Render Services**  
-  - `mcgfinances-web` (Build command `npm run build`, static hosting).  
+  - `mcgfinances-web` (Vite static hosting).  
   - `mcgfinances-api` (Node runtime) with autoscale disabled initially.  
-  - `mcgfinances-worker` background worker service.  
-  - `mcgfinances-db` PostgreSQL, `mcgfinances-redis`.  
-  - `mcgfinances-storage` (S3-compatible bucket) referenced via signed URLs.
+  - `mcgfinances-db` PostgreSQL.  
+  - Optional future: Redis/cache or worker service if background jobs are introduced.
 - CI/CD via GitHub Actions pushing to Render using `render.yaml` blueprint.
 
 ## 4. Security Considerations
@@ -39,9 +37,9 @@
 
 ## 5. Scalability Notes
 - Write-heavy ingestion isolated from read-heavy reporting through CQRS-like approach: transactions stored normalized; nightly summary tables for dashboards.  
-- Redis caching for computed KPIs with invalidation hooks on transaction updates.  
+- Redis/caching can be introduced later for computed KPIs.  
 - File uploads handled via signed direct-to-storage uploads to avoid API bottleneck.  
-- Event-driven architecture (BullMQ queues) allows horizontal scaling of worker service.
+- Event-driven architecture (BullMQ/queues) is optional future work once background jobs are needed.
 
 ## 6. Data Model Snapshot
 - `users(id, email, password_hash, role, mfa_secret, created_at)`  
@@ -60,6 +58,6 @@
 - **Public SDK**: Lightweight TypeScript SDK automatically generated from OpenAPI spec for partner integrations.
 
 ## 8. Dependencies
-- Node 20+, PostgreSQL 15, Redis 7, BullMQ, Zod for validation, Prisma ORM, React 18.  
+- Node 20+, PostgreSQL 15, Zod for validation, Prisma ORM, React 18.  
 - Testing: Jest, Playwright, Pact.  
 - Build tooling: Turborepo for monorepo, PNPM for package management.

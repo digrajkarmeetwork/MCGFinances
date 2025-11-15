@@ -1,7 +1,7 @@
 # Implementation Plan – MCGFinances
 
 ## Phase 0 – Project Setup (Week 0-1)
-- Initialize GitHub repo + Turborepo structure (`apps/web`, `apps/api`, `apps/worker`, `packages/ui`, `packages/config`).
+- Initialize GitHub repo + Turborepo structure (`apps/web`, `apps/api`, `packages/ui`, `packages/config`).
 - Configure linting/formatting (ESLint, Prettier), TypeScript project references, Husky pre-commit hooks.
 - Create base CI pipeline (GitHub Actions) with lint/test/build jobs; add `render.yaml`.
 - Provision Render services (DB, Redis, S3 bucket) and seed environment variables locally via `.env.example`.
@@ -21,7 +21,7 @@
 - Categorization rule engine (priority-based rules + fallback suggestions).  
 - Bulk edit UI, splits, recurring transactions, tax tags.  
 - Reconciliation workflow with match suggestions and approval queue.  
-- Introduce worker queue for nightly bank sync + ML inference tasks.
+- Introduce background jobs later if needed (initial release can poll external APIs synchronously).
 
 ## Phase 3 – Dashboards & Reporting (Week 7-10)
 - Implement cash dashboard API endpoints (burn, runway, top expenses).  
@@ -32,7 +32,7 @@
 ## Phase 4 – Collaboration & Insights (Week 10-12)
 - Task management (assignments, due dates, status updates).  
 - Inline comments on transactions/reports, notifications (email + in-app).  
-- AI insights service hooking into worker pipeline for anomaly detection and cash alerts.
+- AI insights service leveraging scheduled jobs (can run within the API process initially).
 
 ## Phase 5 – Hardening & Launch Prep (Week 12-14)
 - Security review: pen-test, dependency audit, rate limiting, content security policy.  

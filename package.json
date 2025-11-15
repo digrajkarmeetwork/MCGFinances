@@ -6,7 +6,6 @@
   "scripts": {
     "dev:web": "pnpm --filter mcgfinances-web dev",
     "dev:api": "pnpm --filter mcgfinances-api dev",
-    "dev:worker": "pnpm --filter mcgfinances-worker dev",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
     "build": "pnpm --filter mcgfinances-web build",

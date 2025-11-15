@@ -128,40 +128,6 @@ importers:
         specifier: ^7.2.2
         version: 7.2.2(@types/node@24.10.1)(jiti@2.6.1)(tsx@4.20.6)
 
-  apps/worker:
-    dependencies:
-      bullmq:
-        specifier: ^5.8.1
-        version: 5.63.2
-      dotenv:
-        specifier: ^16.4.7
-        version: 16.6.1
-      ioredis:
-        specifier: ^5.4.1
-        version: 5.8.2
-    devDependencies:
-      '@types/node':
-        specifier: ^20.14.15
-        version: 20.19.25
-      '@typescript-eslint/eslint-plugin':
-        specifier: ^8.8.0
-        version: 8.46.4(@typescript-eslint/parser@8.46.4(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.3))(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.3)
-      '@typescript-eslint/parser':
-        specifier: ^8.8.0
-        version: 8.46.4(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.3)
-      eslint:
-        specifier: ^9.9.0
-        version: 9.39.1(jiti@2.6.1)
-      eslint-config-prettier:
-        specifier: ^9.1.0
-        version: 9.1.2(eslint@9.39.1(jiti@2.6.1))
-      typescript:
-        specifier: ^5.5.4
-        version: 5.9.3
-      vitest:
-        specifier: ^2.1.1
-        version: 2.1.9(@types/node@20.19.25)
-
 packages:
 
   '@babel/code-frame@7.27.1':

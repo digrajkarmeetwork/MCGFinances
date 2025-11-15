@@ -2,7 +2,7 @@
 
 ## 1. Prerequisites
 - Render account connected to GitHub.
-- Git repo containing Turborepo structure (`apps/web`, `apps/api`, `apps/worker`) and `render.yaml`.
+- Git repo containing Turborepo structure (`apps/web`, `apps/api`) and `render.yaml`.
 - Environment variables defined in `.env.example` (PLAID keys, JWT secrets, DB URLs, etc.).
 - Docker + PNPM installed locally for building/testing before push.
 
@@ -35,20 +35,8 @@ services:
         fromDatabase:
           name: mcgfinances-db
           property: connectionString
-      - key: REDIS_URL
-        fromService:
-          name: mcgfinances-redis
-  - type: worker
-    name: mcgfinances-worker
-    env: node
-    plan: free
-    buildCommand: pnpm install && pnpm --filter worker build
-    startCommand: pnpm --filter worker start
 databases:
   - name: mcgfinances-db
-    plan: free
-redis:
-  - name: mcgfinances-redis
     plan: free
 ```
 
@@ -76,5 +64,4 @@ redis:
 
 ## 8. Cost Awareness (Free Tier)
 - Free tier limits: 750 build minutes/month, 512 MB RAM per service.  
-- Use `pnpm --filter` to limit dependencies per service and keep builds under 15 min.  
-- Schedule nightly worker downtime if approaching free usage cap.
+- Use `pnpm --filter` to limit dependencies per service and keep builds under 15 min.

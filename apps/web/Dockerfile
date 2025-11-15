@@ -6,7 +6,6 @@ FROM base AS deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/web/package.json ./apps/web/
 COPY apps/api/package.json ./apps/api/
-COPY apps/worker/package.json ./apps/worker/
 RUN pnpm install --filter mcgfinances-web...
 
 FROM base AS builder

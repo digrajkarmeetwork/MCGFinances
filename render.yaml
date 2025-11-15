@@ -14,15 +14,6 @@ services:
     dockerfilePath: apps/web/Dockerfile
     plan: free
     autoDeploy: true
-  - type: worker
-    name: mcgfinances-worker
-    env: docker
-    dockerfilePath: apps/worker/Dockerfile
-    plan: free
-    autoDeploy: true
-  - type: redis
-    name: mcgfinances-redis
-    plan: free
   - type: postgres
     name: mcgfinances-db
     plan: free

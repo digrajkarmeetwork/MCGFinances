@@ -1,11 +1,10 @@
 # MCGFinances
 
-Early scaffolding for the MCGFinances platform. This repository uses a PNPM workspace with Vite/React for the web client, Express for the API, and a BullMQ-based worker. Documentation lives under `docs/`.
+Early scaffolding for the MCGFinances platform. This repository uses a PNPM workspace with Vite/React for the web client and Express/Prisma for the API. Documentation lives under `docs/`.
 
 ## Requirements
 - Node.js 20+ (Vite dev server requires >=20.19)
 - PNPM 9+
-- Redis 7+ (via Docker, Render, or `brew services start redis` for the worker)
 - Docker (optional, for local containers and CI builds)
 
 ## Getting Started
@@ -18,7 +17,6 @@ pnpm --filter mcgfinances-api prisma migrate deploy
 ```bash
 pnpm install
 pnpm dev:api         # starts Express API on port 4000
-pnpm dev:worker      # BullMQ worker (requires Redis running locally)
 pnpm --filter mcgfinances-web dev -- --host 0.0.0.0
 ```
 
@@ -34,4 +32,4 @@ pnpm test
 ```
 
 ## Deployment
-Render services can be created using `render.yaml`. The GitHub Action builds and tests the app then verifies Docker images so Render can pull straight from the repo. Deploy the API + worker (Docker), Postgres, and Redis services, then set the static web service `VITE_API_URL` to your deployed API host (e.g., `https://mcgfinances-api.onrender.com`) so login, summary, and org-specific data stay functional.
+Render services can be created using `render.yaml`. The GitHub Action builds and tests the app then verifies Docker images so Render can pull straight from the repo. Deploy the API (Docker) and Postgres services, then set the static web service `VITE_API_URL` to your deployed API host (e.g., `https://mcgfinances-api.onrender.com`) so login, summary, and org-specific data stay functional.

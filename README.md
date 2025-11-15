@@ -30,4 +30,4 @@ pnpm test
 ```
 
 ## Deployment
-Render services can be created using `render.yaml`. The GitHub Action builds and tests the app then verifies Docker images so Render can pull straight from the repo.
+Render services can be created using `render.yaml`. The GitHub Action builds and tests the app then verifies Docker images so Render can pull straight from the repo. For the static web service, set `VITE_API_URL` to your deployed API host (e.g., `https://mcgfinances-api.onrender.com`) so the dashboard can load live data; the client now falls back to that domain automatically when hosted on `mcgfinances.onrender.com`.

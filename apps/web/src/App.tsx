@@ -15,10 +15,21 @@ const formatCurrency = (value: number) =>
     maximumFractionDigits: 0,
   }).format(value)
 
-const apiBase = (import.meta.env.VITE_API_URL as string | undefined)?.replace(
-  /\/$/,
-  '',
-)
+const resolveApiBase = () => {
+  const envValue = (import.meta.env.VITE_API_URL as string | undefined)?.trim()
+  if (envValue) {
+    return envValue.replace(/\/$/, '')
+  }
+
+  if (typeof window !== 'undefined') {
+    const origin = window.location.origin
+    if (origin.includes('mcgfinances.onrender.com')) {
+      return 'https://mcgfinances-api.onrender.com'
+    }
+  }
+
+  return undefined
+}
 
 const mockTrends = [
   { label: 'Payroll', change: '-2.1% vs last month', tone: 'down' },
@@ -39,6 +50,7 @@ function App() {
 
   const summaryUrl = useMemo(() => {
     const suffix = '/api/v1/summary'
+    const apiBase = resolveApiBase()
     if (!apiBase) {
       return suffix
     }

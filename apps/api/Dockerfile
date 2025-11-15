@@ -15,6 +15,7 @@ COPY --from=deps /app/apps ./apps
 COPY tsconfig.base.json ./
 COPY apps/api ./apps/api
 RUN pnpm --filter mcgfinances-api build
+RUN pnpm --filter mcgfinances-api exec prisma generate --schema apps/api/prisma/schema.prisma
 
 FROM base AS runner
 ENV NODE_ENV=production

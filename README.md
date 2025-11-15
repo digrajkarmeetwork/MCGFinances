@@ -3,16 +3,17 @@
 Early scaffolding for the MCGFinances platform. This repository uses a PNPM workspace with Vite/React for the web client, Express for the API, and a BullMQ-based worker. Documentation lives under `docs/`.
 
 ## Requirements
-- Node.js 18+
+- Node.js 20+ (Vite dev server requires >=20.19)
 - PNPM 9+
-- Docker (for local containers and CI builds)
+- Redis 7+ (via Docker, Render, or `brew services start redis` for the worker)
+- Docker (optional, for local containers and CI builds)
 
 ## Getting Started
 ```bash
 pnpm install
-pnpm dev:api # starts Express API on port 4000
-pnpm --filter mcgfinances-web dev # starts Vite dev server
-pnpm dev:worker # runs the background worker
+pnpm dev:api         # starts Express API on port 4000
+pnpm dev:worker      # BullMQ worker (requires Redis running locally)
+pnpm --filter mcgfinances-web dev -- --host 0.0.0.0
 ```
 
 Use the provided `docker-compose.yml` for a full stack with Postgres + Redis:

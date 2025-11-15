@@ -13,7 +13,20 @@ dotenv.config()
 
 const app = express()
 app.use(express.json())
-app.use(cors())
+const allowedOrigins = (
+  process.env.ALLOWED_ORIGINS ||
+  'https://mcgfinances-vfeu.onrender.com,http://localhost:4173'
+)
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean)
+
+const corsOptions: cors.CorsOptions = {
+  origin: allowedOrigins,
+}
+
+app.use(cors(corsOptions))
+app.options('*', cors(corsOptions))
 app.use(helmet())
 app.use(morgan('dev'))
 

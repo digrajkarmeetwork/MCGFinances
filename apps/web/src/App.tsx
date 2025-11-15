@@ -181,10 +181,14 @@ function App() {
       if (!response.ok) {
         throw new Error(extractError(payload, 'Unable to load transactions'))
       }
-      const data = payload as Transaction[]
-      setTransactions(data)
+      if (Array.isArray(payload)) {
+        setTransactions(payload as Transaction[])
+      } else {
+        throw new Error('Malformed transactions payload')
+      }
     } catch (err) {
       setTxError(err instanceof Error ? err.message : 'Unable to load data')
+      setTransactions([])
     }
   }, [buildUrl, token])
 

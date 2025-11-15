@@ -9,6 +9,8 @@ Early scaffolding for the MCGFinances platform. This repository uses a PNPM work
 - Docker (optional, for local containers and CI builds)
 
 ## Getting Started
+Create a `.env` from `.env.example` and ensure `VITE_API_URL` points at your API host (`http://localhost:4000` for local dev).
+
 ```bash
 pnpm install
 pnpm dev:api         # starts Express API on port 4000

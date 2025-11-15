@@ -20,6 +20,18 @@ const apiBase = (import.meta.env.VITE_API_URL as string | undefined)?.replace(
   '',
 )
 
+const mockTrends = [
+  { label: 'Payroll', change: '-2.1% vs last month', tone: 'down' },
+  { label: 'Marketing', change: '+6.4% vs last month', tone: 'up' },
+  { label: 'Software', change: '+1.3% vs last month', tone: 'flat' },
+]
+
+const mockActivity = [
+  { title: 'Invoice #4215 paid', detail: 'Design project', amount: '+$6,200' },
+  { title: 'New bill: SaaS Platform', detail: 'Due Apr 18', amount: '-$960' },
+  { title: 'Tax reserve transfer', detail: 'State filings', amount: '-$2,100' },
+]
+
 function App() {
   const [summary, setSummary] = useState<Summary | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -60,36 +72,48 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const cards = summary
+  const kpiCards = summary
     ? [
         {
-          label: 'Cash On Hand',
+          label: 'Cash on hand',
           value: formatCurrency(summary.cashOnHand),
-          tone: 'positive',
+          caption: 'Operating + savings',
         },
         {
-          label: 'Monthly Burn',
+          label: 'Monthly burn',
           value: formatCurrency(summary.monthlyBurn),
-          tone: 'warning',
+          caption: 'Includes payroll + vendors',
         },
         {
           label: 'Runway',
           value: `${summary.runwayMonths.toFixed(1)} months`,
-          tone: 'neutral',
+          caption: 'Target ≥ 6 months',
         },
       ]
     : []
 
   return (
-    <div className="page">
-      <main className="container">
+    <div className="shell">
+      <div className="shell__glow" />
+      <main className="shell__main">
+        <nav className="nav">
+          <div>
+            <p className="logo">MCGFinances</p>
+            <span className="badge">Beta</span>
+          </div>
+          <div className="nav__actions">
+            <button className="ghost">Support</button>
+            <button className="primary">Add account</button>
+          </div>
+        </nav>
+
         <header className="hero">
           <div>
-            <p className="eyebrow">MCGFinances</p>
-            <h1>Know your cash position at any moment</h1>
+            <p className="eyebrow">Control Center</p>
+            <h1>Financial health, crystal clear</h1>
             <p className="lead">
-              Connect bank feeds, categorize spend, and keep a constant pulse on
-              burn, runway, and profitability.
+              Monitor cash flow, runway, and spend drivers from one workspace.
+              Perfect for founders and advisors on the move.
             </p>
           </div>
           <button className="refresh" onClick={loadSummary} disabled={loading}>
@@ -99,64 +123,94 @@ function App() {
 
         {error && (
           <div className="panel error">
-            <strong>Unable to load summary:</strong> {error}
+            <strong>Unable to load summary.</strong> {error}
           </div>
         )}
 
         {loading && !summary && !error && (
           <div className="panel loading">
-            <p>Loading insights…</p>
+            <div className="dots">
+              <span />
+              <span />
+              <span />
+            </div>
+            <p>Syncing with your bank feeds…</p>
           </div>
         )}
 
         {summary && (
           <>
-            <section className="grid">
-              {cards.map((card) => (
-                <article key={card.label} className={`panel ${card.tone}`}>
-                  <p className="label">{card.label}</p>
-                  <p className="value">{card.value}</p>
+            <section className="kpis">
+              {kpiCards.map((card) => (
+                <article key={card.label} className="kpis__card">
+                  <p className="kpis__label">{card.label}</p>
+                  <p className="kpis__value">{card.value}</p>
+                  <p className="kpis__caption">{card.caption}</p>
                 </article>
               ))}
             </section>
 
-            <section className="diagnostics panel">
+            <section className="grid">
+              <article className="panel insights">
+                <div className="panel__header">
+                  <h2>Spend pulse</h2>
+                  <span>Last 30 days</span>
+                </div>
+                <ul>
+                  {mockTrends.map((trend) => (
+                    <li key={trend.label}>
+                      <div>
+                        <p>{trend.label}</p>
+                        <small>{trend.change}</small>
+                      </div>
+                      <span className={`trend trend--${trend.tone}`} />
+                    </li>
+                  ))}
+                </ul>
+              </article>
+
+              <article className="panel activity">
+                <div className="panel__header">
+                  <h2>Recent activity</h2>
+                  <span>Automatic & manual entries</span>
+                </div>
+                <ul>
+                  {mockActivity.map((item) => (
+                    <li key={item.title}>
+                      <div>
+                        <strong>{item.title}</strong>
+                        <p>{item.detail}</p>
+                      </div>
+                      <span className="amount">{item.amount}</span>
+                    </li>
+                  ))}
+                </ul>
+              </article>
+            </section>
+
+            <section className="panel advisory">
               <div>
-                <h2>Need-to-know metrics</h2>
+                <h2>Advisor notes</h2>
                 <p>
                   Stay under {formatCurrency(summary.monthlyBurn)} in monthly
-                  burn to preserve the {summary.runwayMonths.toFixed(1)} months
-                  of runway shown here. Keep cash &gt; runway target to avoid
-                  shortfalls.
+                  burn to preserve {summary.runwayMonths.toFixed(1)} months of
+                  runway. Review discretionary spend weekly and flag anomalies.
                 </p>
               </div>
-              <ul>
-                <li>
-                  <span className="tag healthy" />
-                  Cash is updated in near real-time from your financial
-                  institutions.
-                </li>
-                <li>
-                  <span className="tag caution" />
-                  Watch spend spikes—set alerts inside the platform.
-                </li>
-                <li>
-                  <span className="tag info" />
-                  Export full reports and collaborate with advisors directly.
-                </li>
-              </ul>
+              <button className="ghost">Share report</button>
             </section>
           </>
         )}
 
         <footer className="footer">
-          <p>
-            {summary
-              ? `Last updated ${new Date(
-                  summary.updatedAt,
-                ).toLocaleString()}`
-              : 'Connect your accounts to unlock cash visibility.'}
-          </p>
+          {summary ? (
+            <p>
+              Last updated {new Date(summary.updatedAt).toLocaleString()} ·
+              synced nightly & on demand.
+            </p>
+          ) : (
+            <p>Connect your first bank account to unlock insights.</p>
+          )}
         </footer>
       </main>
     </div>

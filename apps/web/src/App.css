@@ -334,7 +334,28 @@ body {
   font-size: 0.85rem;
 }
 
-.insights ul,
+.insights .totals {
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.insights .totals div {
+  background: rgba(99, 102, 241, 0.08);
+  padding: 1rem;
+  border-radius: 14px;
+  flex: 1;
+}
+
+.insights .totals p {
+  margin: 0 0 0.5rem;
+  color: #475569;
+}
+
+.insights .totals strong {
+  font-size: 1.8rem;
+}
+
 .activity ul {
   list-style: none;
   padding: 0;
@@ -344,7 +365,6 @@ body {
   gap: 1rem;
 }
 
-.insights li,
 .activity li {
   display: flex;
   justify-content: space-between;
@@ -352,28 +372,6 @@ body {
   background: rgba(99, 102, 241, 0.05);
   padding: 1rem;
   border-radius: 14px;
-}
-
-.insights li small {
-  color: #475569;
-}
-
-.trend {
-  width: 8px;
-  height: 38px;
-  border-radius: 999px;
-}
-
-.trend--up {
-  background: #f97316;
-}
-
-.trend--down {
-  background: #22c55e;
-}
-
-.trend--flat {
-  background: #94a3b8;
 }
 
 .activity li strong {
@@ -391,6 +389,55 @@ body {
   color: #0f172a;
 }
 
+.amount.negative {
+  color: #b91c1c;
+}
+
+.amount.positive {
+  color: #15803d;
+}
+
+.transaction-form form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1rem;
+}
+
+.transaction-form input,
+.transaction-form select {
+  border: 1px solid rgba(15, 23, 42, 0.15);
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  font-family: inherit;
+  font-size: 1rem;
+}
+
+.transactions-table .table-wrapper {
+  overflow-x: auto;
+}
+
+.transactions-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.transactions-table th,
+.transactions-table td {
+  text-align: left;
+  padding: 0.75rem;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.transactions-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
 .advisory {
   display: flex;
   justify-content: space-between;
@@ -402,6 +449,14 @@ body {
 .advisory p {
   margin: 0.5rem 0 0;
   color: #475569;
+}
+
+.table-wrapper td.negative {
+  color: #b91c1c;
+}
+
+.table-wrapper td.positive {
+  color: #15803d;
 }
 
 .footer {

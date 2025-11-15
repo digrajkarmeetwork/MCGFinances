@@ -13,6 +13,7 @@ model Organization {
   createdAt    DateTime      @default(now())
   memberships  Membership[]
   summary      Summary?
+  transactions Transaction[]
 }
 
 model User {
@@ -41,4 +42,20 @@ model Summary {
   monthlyBurn    Int          @default(0)
   runwayMonths   Float        @default(0)
   updatedAt      DateTime     @updatedAt
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+model Transaction {
+  id             String          @id @default(cuid())
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  organizationId String
+  amount         Int
+  type           TransactionType
+  description    String
+  occurredAt     DateTime        @default(now())
+  createdAt      DateTime        @default(now())
 }

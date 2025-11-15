@@ -9,12 +9,27 @@ type Summary = {
   updatedAt: string
 }
 
+type Transaction = {
+  id: string
+  description: string
+  amount: number
+  type: 'INCOME' | 'EXPENSE'
+  occurredAt: string
+}
+
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
     maximumFractionDigits: 0,
   }).format(value)
+
+const formatDate = (value: string) =>
+  new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(new Date(value))
 
 const resolveApiBase = () => {
   const envValue = (import.meta.env.VITE_API_URL as string | undefined)?.trim()
@@ -31,18 +46,6 @@ const resolveApiBase = () => {
 
   return undefined
 }
-
-const mockTrends = [
-  { label: 'Payroll', change: '-2.1% vs last month', tone: 'down' },
-  { label: 'Marketing', change: '+6.4% vs last month', tone: 'up' },
-  { label: 'Software', change: '+1.3% vs last month', tone: 'flat' },
-]
-
-const mockActivity = [
-  { title: 'Invoice #4215 paid', detail: 'Design project', amount: '+$6,200' },
-  { title: 'New bill: SaaS Platform', detail: 'Due Apr 18', amount: '-$960' },
-  { title: 'Tax reserve transfer', detail: 'State filings', amount: '-$2,100' },
-]
 
 function App() {
   const [summary, setSummary] = useState<Summary | null>(null)
@@ -64,6 +67,15 @@ function App() {
     user: { id: string; email: string }
     organization: { id: string; name: string }
   } | null>(null)
+  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [txForm, setTxForm] = useState({
+    description: '',
+    amount: '',
+    type: 'EXPENSE' as 'INCOME' | 'EXPENSE',
+    occurredAt: '',
+  })
+  const [txError, setTxError] = useState<string | null>(null)
+  const [txBusy, setTxBusy] = useState(false)
 
   const apiBaseMemo = useMemo(() => resolveApiBase(), [])
 
@@ -139,10 +151,30 @@ function App() {
     }
   }, [buildUrl, token])
 
+  const loadTransactions = useCallback(async () => {
+    if (!token) {
+      setTransactions([])
+      return
+    }
+    try {
+      const response = await fetch(buildUrl('/api/v1/transactions'), {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!response.ok) {
+        throw new Error('Unable to fetch transactions')
+      }
+      const data = (await response.json()) as Transaction[]
+      setTransactions(data)
+    } catch (err) {
+      setTxError(err instanceof Error ? err.message : 'Unable to fetch data')
+    }
+  }, [buildUrl, token])
+
   useEffect(() => {
     loadProfile()
     loadSummary()
-  }, [loadProfile, loadSummary])
+    loadTransactions()
+  }, [loadProfile, loadSummary, loadTransactions])
 
   const handleAuthSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -175,6 +207,7 @@ function App() {
       setAuthForm({ email: '', password: '', organizationName: '' })
       setAuthMode('login')
       loadSummary()
+      loadTransactions()
     } catch (err) {
       setAuthError(err instanceof Error ? err.message : 'Unable to authenticate')
     } finally {
@@ -187,6 +220,46 @@ function App() {
     setProfile(null)
     window.localStorage.removeItem('mcgfinances.token')
     setSummary(null)
+    setTransactions([])
+  }
+
+  const handleTransactionSubmit = async (
+    event: FormEvent<HTMLFormElement>,
+  ) => {
+    event.preventDefault()
+    setTxBusy(true)
+    setTxError(null)
+    try {
+      if (!token) {
+        throw new Error('Please log in to add activity.')
+      }
+      const payload = {
+        description: txForm.description,
+        amount: Number(txForm.amount),
+        type: txForm.type,
+        occurredAt: txForm.occurredAt || undefined,
+      }
+      const response = await fetch(buildUrl('/api/v1/transactions'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      })
+      if (!response.ok) {
+        const details = await response.json().catch(() => ({}))
+        throw new Error(details.message || 'Unable to save transaction')
+      }
+      const created = (await response.json()) as Transaction
+      setTransactions((prev) => [created, ...prev].slice(0, 100))
+      setTxForm({ description: '', amount: '', type: 'EXPENSE', occurredAt: '' })
+      loadSummary()
+    } catch (err) {
+      setTxError(err instanceof Error ? err.message : 'Unable to save entry')
+    } finally {
+      setTxBusy(false)
+    }
   }
 
   const kpiCards = summary
@@ -208,6 +281,22 @@ function App() {
         },
       ]
     : []
+
+  const transactionTotals = useMemo(
+    () =>
+      transactions.reduce(
+        (acc, transaction) => {
+          if (transaction.type === 'INCOME') {
+            acc.income += transaction.amount
+          } else {
+            acc.expense += transaction.amount
+          }
+          return acc
+        },
+        { income: 0, expense: 0 },
+      ),
+    [transactions],
+  )
 
   return (
     <div className="shell">
@@ -359,37 +448,50 @@ function App() {
             <section className="grid">
               <article className="panel insights">
                 <div className="panel__header">
-                  <h2>Spend pulse</h2>
+                  <h2>Cash pulse</h2>
                   <span>Last 30 days</span>
                 </div>
-                <ul>
-                  {mockTrends.map((trend) => (
-                    <li key={trend.label}>
-                      <div>
-                        <p>{trend.label}</p>
-                        <small>{trend.change}</small>
-                      </div>
-                      <span className={`trend trend--${trend.tone}`} />
-                    </li>
-                  ))}
-                </ul>
+                <div className="totals">
+                  <div>
+                    <p>Incoming</p>
+                    <strong>{formatCurrency(transactionTotals.income)}</strong>
+                  </div>
+                  <div>
+                    <p>Outgoing</p>
+                    <strong className="negative">
+                      {formatCurrency(transactionTotals.expense)}
+                    </strong>
+                  </div>
+                </div>
               </article>
 
               <article className="panel activity">
                 <div className="panel__header">
                   <h2>Recent activity</h2>
-                  <span>Automatic & manual entries</span>
+                  <span>Your latest entries</span>
                 </div>
                 <ul>
-                  {mockActivity.map((item) => (
-                    <li key={item.title}>
+                  {transactions.slice(0, 4).map((item) => (
+                    <li key={item.id}>
                       <div>
-                        <strong>{item.title}</strong>
-                        <p>{item.detail}</p>
+                        <strong>{item.description}</strong>
+                        <p>{formatDate(item.occurredAt)}</p>
                       </div>
-                      <span className="amount">{item.amount}</span>
+                      <span
+                        className={`amount ${
+                          item.type === 'EXPENSE' ? 'negative' : 'positive'
+                        }`}
+                      >
+                        {item.type === 'EXPENSE' ? '-' : '+'}
+                        {formatCurrency(item.amount)}
+                      </span>
                     </li>
                   ))}
+                  {transactions.length === 0 && (
+                    <li>
+                      <p>No activity yet. Add your first transaction below.</p>
+                    </li>
+                  )}
                 </ul>
               </article>
             </section>
@@ -404,6 +506,112 @@ function App() {
                 </p>
               </div>
               <button className="ghost">Share report</button>
+            </section>
+
+            <section className="panel transaction-form">
+              <h2>Log new activity</h2>
+              <form onSubmit={handleTransactionSubmit}>
+                <label>
+                  <span>Description</span>
+                  <input
+                    required
+                    value={txForm.description}
+                    onChange={(event) =>
+                      setTxForm((prev) => ({
+                        ...prev,
+                        description: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <div className="form-row">
+                  <label>
+                    <span>Amount (USD)</span>
+                    <input
+                      required
+                      type="number"
+                      min="1"
+                      value={txForm.amount}
+                      onChange={(event) =>
+                        setTxForm((prev) => ({
+                          ...prev,
+                          amount: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                  <label>
+                    <span>Type</span>
+                    <select
+                      value={txForm.type}
+                      onChange={(event) =>
+                        setTxForm((prev) => ({
+                          ...prev,
+                          type: event.target.value as 'INCOME' | 'EXPENSE',
+                        }))
+                      }
+                    >
+                      <option value="INCOME">Income</option>
+                      <option value="EXPENSE">Expense</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>Date</span>
+                    <input
+                      type="date"
+                      value={txForm.occurredAt}
+                      onChange={(event) =>
+                        setTxForm((prev) => ({
+                          ...prev,
+                          occurredAt: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                </div>
+                {txError && <p className="auth-error">{txError}</p>}
+                <button className="primary" type="submit" disabled={txBusy}>
+                  {txBusy ? 'Saving...' : 'Add transaction'}
+                </button>
+              </form>
+            </section>
+
+            <section className="panel transactions-table">
+              <div className="panel__header">
+                <h2>All activity</h2>
+                <span>{transactions.length} entries</span>
+              </div>
+              <div className="table-wrapper">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Description</th>
+                      <th>Date</th>
+                      <th>Type</th>
+                      <th>Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {transactions.map((transaction) => (
+                      <tr key={transaction.id}>
+                        <td>{transaction.description}</td>
+                        <td>{formatDate(transaction.occurredAt)}</td>
+                        <td>{transaction.type}</td>
+                        <td
+                          className={
+                            transaction.type === 'EXPENSE'
+                              ? 'negative'
+                              : 'positive'
+                          }
+                        >
+                          {transaction.type === 'EXPENSE' ? '-' : '+'}
+                          {formatCurrency(transaction.amount)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </section>
           </>
         )}

@@ -22,5 +22,6 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=builder /app/apps/api/dist ./dist
 COPY apps/api/package.json ./package.json
+RUN pnpm prune --prod
 EXPOSE 4000
 CMD ["node", "dist/index.js"]

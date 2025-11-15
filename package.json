@@ -9,7 +9,8 @@
     "dev:worker": "pnpm --filter mcgfinances-worker dev",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
-    "build": "pnpm -r build",
+    "build": "pnpm --filter mcgfinances-web build",
+    "build:all": "pnpm -r build",
     "postbuild": "rm -rf dist && mkdir -p dist && cp -R apps/web/dist/. dist/"
   },
   "devDependencies": {

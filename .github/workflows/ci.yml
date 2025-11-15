@@ -25,6 +25,6 @@ jobs:
       - name: Test
         run: pnpm test
       - name: Build
-        run: pnpm build
+        run: pnpm build:all
       - name: Docker Compose Build
         run: docker compose build

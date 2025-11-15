@@ -59,7 +59,7 @@ const createTransactionSchema = z.object({
   description: z.string().min(2),
   amount: z.number().positive(),
   type: z.enum(['INCOME', 'EXPENSE']),
-  occurredAt: z.string().datetime().optional(),
+  occurredAt: z.string().optional(),
 })
 
 app.get('/healthz', (_req, res) => {

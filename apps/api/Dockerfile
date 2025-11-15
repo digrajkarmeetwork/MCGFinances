@@ -19,8 +19,8 @@ RUN pnpm --filter mcgfinances-api build
 
 FROM base AS runner
 ENV NODE_ENV=production
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
+WORKDIR /app/apps/api
+COPY --from=deps /app/apps/api/node_modules ./node_modules
 COPY --from=builder /app/apps/api/dist ./dist
 COPY apps/api/package.json ./package.json
 EXPOSE 4000

@@ -20,8 +20,10 @@ RUN pnpm --filter mcgfinances-api build
 FROM base AS runner
 ENV NODE_ENV=production
 WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/api/package.json ./apps/api/
+COPY apps/api/prisma ./apps/api/prisma
+RUN pnpm install --filter mcgfinances-api... --prod && pnpm --filter mcgfinances-api prisma:generate
 COPY --from=builder /app/apps/api/dist ./dist
-COPY apps/api/package.json ./package.json
 EXPOSE 4000
 CMD ["node", "dist/index.js"]

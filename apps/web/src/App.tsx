@@ -278,7 +278,7 @@ function App() {
     }
   }
 
-  const kpiCards = summary
+ const kpiCards = summary
     ? [
         {
           label: 'Cash on hand',
@@ -292,7 +292,10 @@ function App() {
         },
         {
           label: 'Runway',
-          value: `${summary.runwayMonths.toFixed(1)} months`,
+          value:
+            summary.monthlyBurn > 0
+              ? `${summary.runwayMonths.toFixed(1)} months`
+              : 'Track expenses to unlock',
           caption: 'Target ≥ 6 months',
         },
       ]

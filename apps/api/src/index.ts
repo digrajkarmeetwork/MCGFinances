@@ -5,8 +5,8 @@ import morgan from 'morgan'
 import dotenv from 'dotenv'
 import { z } from 'zod'
 import bcrypt from 'bcryptjs'
-import { prisma } from './prisma'
-import { authenticate, generateToken } from './auth'
+import { prisma } from './prisma.js'
+import { authenticate, generateToken } from './auth.js'
 
 dotenv.config()
 

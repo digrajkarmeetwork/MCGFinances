@@ -6,6 +6,7 @@ type TokenPayload = {
   organizationId: string
 }
 
+/* eslint-disable @typescript-eslint/no-namespace */
 declare global {
   namespace Express {
     interface Request {
@@ -13,6 +14,7 @@ declare global {
     }
   }
 }
+/* eslint-enable @typescript-eslint/no-namespace */
 
 const getSecret = () => {
   const secret = process.env.JWT_SECRET

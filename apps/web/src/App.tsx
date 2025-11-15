@@ -39,7 +39,7 @@ const resolveApiBase = () => {
 
   if (typeof window !== 'undefined') {
     const origin = window.location.origin
-    if (origin.includes('mcgfinances.onrender.com')) {
+    if (origin.includes('mcgfinances')) {
       return 'https://mcgfinances-api.onrender.com'
     }
   }

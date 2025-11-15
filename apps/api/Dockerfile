@@ -3,6 +3,7 @@ RUN corepack enable && apk add --no-cache libc6-compat
 WORKDIR /app
 
 FROM base AS deps
+RUN pnpm config set store-dir /pnpm/store
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/api/package.json apps/api/tsconfig.json ./apps/api/
 COPY apps/web/package.json ./apps/web/

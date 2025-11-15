@@ -327,7 +327,7 @@ function App() {
             <span className="badge">Beta</span>
           </div>
           <div className="nav__actions">
-            {profile ? (
+            {profile && profile.user ? (
               <>
                 <span className="pill">{profile.user.email}</span>
                 <button className="ghost" onClick={handleLogout}>
@@ -361,7 +361,7 @@ function App() {
           )}
         </header>
 
-        {!profile && (
+        {!profile?.user && (
           <section className="auth-panel">
             <div className="auth-tabs">
               <button

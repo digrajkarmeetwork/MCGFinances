@@ -1,0 +1,12 @@
+node_modules
+apps/web/node_modules
+apps/api/node_modules
+apps/worker/node_modules
+apps/web/dist
+apps/api/dist
+apps/worker/dist
+.env
+.env.*
+dist
+coverage
+.DS_Store

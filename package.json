@@ -1,0 +1,14 @@
+{
+  "name": "mcgfinances",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@9.7.1",
+  "scripts": {
+    "dev:web": "pnpm --filter mcgfinances-web dev",
+    "dev:api": "pnpm --filter mcgfinances-api dev",
+    "dev:worker": "pnpm --filter mcgfinances-worker dev",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "build": "pnpm -r build"
+  }
+}

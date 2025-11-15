@@ -8,7 +8,7 @@ COPY apps/api/package.json apps/api/tsconfig.json ./apps/api/
 COPY apps/web/package.json ./apps/web/
 COPY apps/worker/package.json ./apps/worker/
 COPY apps/api/prisma ./apps/api/prisma
-RUN pnpm install --filter mcgfinances-api... && pnpm --filter mcgfinances-api exec prisma generate --schema apps/api/prisma/schema.prisma
+RUN pnpm install --filter mcgfinances-api... && pnpm --filter mcgfinances-api prisma:generate
 
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules

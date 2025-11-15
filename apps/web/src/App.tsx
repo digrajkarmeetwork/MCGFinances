@@ -47,8 +47,29 @@ const resolveApiBase = () => {
   return undefined
 }
 
+const readBody = async (response: Response): Promise<unknown> => {
+  const contentType = response.headers.get('content-type') ?? ''
+  if (contentType.includes('application/json')) {
+    return response.json()
+  }
+  return response.text()
+}
+
+const extractError = (payload: unknown, fallback: string) => {
+  if (typeof payload === 'string') {
+    const trimmed = payload.trim()
+    return trimmed.length ? trimmed : fallback
+  }
+  if (payload && typeof payload === 'object' && 'message' in payload) {
+    const value = (payload as { message?: string }).message?.trim()
+    if (value) return value
+  }
+  return fallback
+}
+
 function App() {
   const [summary, setSummary] = useState<Summary | null>(null)
+  const [transactions, setTransactions] = useState<Transaction[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [token, setToken] = useState<string | null>(() => {
@@ -67,7 +88,6 @@ function App() {
     user: { id: string; email: string }
     organization: { id: string; name: string }
   } | null>(null)
-  const [transactions, setTransactions] = useState<Transaction[]>([])
   const [txForm, setTxForm] = useState({
     description: '',
     amount: '',
@@ -103,10 +123,11 @@ function App() {
       const res = await fetch(buildUrl('/api/v1/auth/me'), {
         headers: { Authorization: `Bearer ${token}` },
       })
+      const payload = await readBody(res)
       if (!res.ok) {
-        throw new Error('The session expired, please sign in again.')
+        throw new Error(extractError(payload, 'The session expired.'))
       }
-      const data = (await res.json()) as {
+      const data = payload as {
         user: { id: string; email: string }
         organization: { id: string; name: string }
       }
@@ -115,9 +136,7 @@ function App() {
       setToken(null)
       window.localStorage.removeItem('mcgfinances.token')
       setProfile(null)
-      setAuthError(
-        err instanceof Error ? err.message : 'Unable to load profile',
-      )
+      setAuthError(err instanceof Error ? err.message : 'Unable to load profile')
     }
   }, [buildUrl, token])
 
@@ -135,13 +154,11 @@ function App() {
           Authorization: `Bearer ${token}`,
         },
       })
+      const payload = await readBody(response)
       if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error('Session expired. Please login again.')
-        }
-        throw new Error('Network response was not ok')
+        throw new Error(extractError(payload, 'Unable to load summary'))
       }
-      const data = (await response.json()) as Summary
+      const data = payload as Summary
       setSummary(data)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error')
@@ -160,13 +177,14 @@ function App() {
       const response = await fetch(buildUrl('/api/v1/transactions'), {
         headers: { Authorization: `Bearer ${token}` },
       })
+      const payload = await readBody(response)
       if (!response.ok) {
-        throw new Error('Unable to fetch transactions')
+        throw new Error(extractError(payload, 'Unable to load transactions'))
       }
-      const data = (await response.json()) as Transaction[]
+      const data = payload as Transaction[]
       setTransactions(data)
     } catch (err) {
-      setTxError(err instanceof Error ? err.message : 'Unable to fetch data')
+      setTxError(err instanceof Error ? err.message : 'Unable to load data')
     }
   }, [buildUrl, token])
 
@@ -183,20 +201,20 @@ function App() {
     try {
       const endpoint =
         authMode === 'signup' ? '/api/v1/auth/signup' : '/api/v1/auth/login'
-      const payload =
+      const payloadBody =
         authMode === 'signup'
           ? authForm
           : { email: authForm.email, password: authForm.password }
       const response = await fetch(buildUrl(endpoint), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(payloadBody),
       })
+      const payload = await readBody(response)
       if (!response.ok) {
-        const details = await response.json().catch(() => ({}))
-        throw new Error(details.message || 'Unable to authenticate')
+        throw new Error(extractError(payload, 'Unable to authenticate'))
       }
-      const data = (await response.json()) as {
+      const data = payload as {
         token: string
         user: { id: string; email: string }
         organization: { id: string; name: string }
@@ -223,9 +241,7 @@ function App() {
     setTransactions([])
   }
 
-  const handleTransactionSubmit = async (
-    event: FormEvent<HTMLFormElement>,
-  ) => {
+  const handleTransactionSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setTxBusy(true)
     setTxError(null)
@@ -233,7 +249,7 @@ function App() {
       if (!token) {
         throw new Error('Please log in to add activity.')
       }
-      const payload = {
+      const payloadBody = {
         description: txForm.description,
         amount: Number(txForm.amount),
         type: txForm.type,
@@ -245,14 +261,14 @@ function App() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(payloadBody),
       })
+      const payload = await readBody(response)
       if (!response.ok) {
-        const details = await response.json().catch(() => ({}))
-        throw new Error(details.message || 'Unable to save transaction')
+        throw new Error(extractError(payload, 'Unable to save transaction'))
       }
-      const created = (await response.json()) as Transaction
-      setTransactions((prev) => [created, ...prev].slice(0, 100))
+      const transaction = payload as Transaction
+      setTransactions((prev) => [transaction, ...prev].slice(0, 100))
       setTxForm({ description: '', amount: '', type: 'EXPENSE', occurredAt: '' })
       loadSummary()
     } catch (err) {
@@ -571,7 +587,7 @@ function App() {
                 </div>
                 {txError && <p className="auth-error">{txError}</p>}
                 <button className="primary" type="submit" disabled={txBusy}>
-                  {txBusy ? 'Saving...' : 'Add transaction'}
+                  {txBusy ? 'Saving…' : 'Add transaction'}
                 </button>
               </form>
             </section>

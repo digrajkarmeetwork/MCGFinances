@@ -12,6 +12,8 @@
 body {
   margin: 0;
   min-height: 100vh;
+  display: flex;
+  justify-content: center;
   background-color: #030712;
   background-image: radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.08), transparent 45%),
     radial-gradient(circle at 80% 0, rgba(59, 130, 246, 0.35), transparent 40%),
@@ -20,12 +22,15 @@ body {
 }
 
 .shell {
+  width: 100%;
+  max-width: 1400px;
   min-height: 100vh;
   padding: clamp(1.5rem, 3vw, 4rem);
   position: relative;
   overflow: hidden;
   display: flex;
   justify-content: center;
+  margin: 0 auto;
 }
 
 .shell__glow {
@@ -40,7 +45,8 @@ body {
 .shell__main {
   position: relative;
   z-index: 1;
-  width: min(1100px, calc(100% - clamp(1rem, 4vw, 4rem)));
+  width: min(1100px, 100%);
+  margin: 0 auto;
   background: rgba(248, 250, 252, 0.98);
   border-radius: 28px;
   padding: clamp(1.75rem, 3vw, 3rem);

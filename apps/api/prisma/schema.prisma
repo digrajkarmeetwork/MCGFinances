@@ -8,12 +8,13 @@ datasource db {
 }
 
 model Organization {
-  id           String        @id @default(cuid())
-  name         String
-  createdAt    DateTime      @default(now())
-  memberships  Membership[]
-  summary      Summary?
-  transactions Transaction[]
+  id              String        @id @default(cuid())
+  name            String
+  defaultCurrency String        @default("CAD")
+  createdAt       DateTime      @default(now())
+  memberships     Membership[]
+  summary         Summary?
+  transactions    Transaction[]
 }
 
 model User {
@@ -54,6 +55,7 @@ model Transaction {
   organization   Organization    @relation(fields: [organizationId], references: [id])
   organizationId String
   amount         Int
+  currency       String          @default("CAD")
   type           TransactionType
   description    String
   occurredAt     DateTime        @default(now())

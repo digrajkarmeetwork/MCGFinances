@@ -53,15 +53,56 @@ const summarySchema = z.object({
   cashOnHand: z.number(),
   monthlyBurn: z.number(),
   runwayMonths: z.number(),
+  currency: z.string(),
   updatedAt: z.string(),
 })
 
 const createTransactionSchema = z.object({
   description: z.string().min(2),
   amount: z.number().positive(),
+  currency: z.string().min(3).max(4).optional(),
   type: z.enum(['INCOME', 'EXPENSE']),
   occurredAt: z.string().optional(),
 })
+
+const switchOrganizationSchema = z.object({
+  organizationId: z.string().min(1),
+})
+
+const resetOrganizationSchema = z.object({
+  organizationId: z.string().min(1),
+})
+
+const formatOrgSummary = (organizations: Array<{ organization: { id: string; name: string; defaultCurrency: string } }>) =>
+  organizations.map(({ organization }) => ({
+    id: organization.id,
+    name: organization.name,
+    defaultCurrency: organization.defaultCurrency,
+  }))
+
+const getUserOrganizations = async (userId: string) => {
+  const memberships = await prisma.membership.findMany({
+    where: { userId },
+    include: { organization: true },
+  })
+  return formatOrgSummary(memberships)
+}
+
+const formatMoney = (value: number, currency: string) => {
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency,
+      maximumFractionDigits: 0,
+    }).format(value)
+  } catch {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      maximumFractionDigits: 0,
+    }).format(value)
+  }
+}
 
 app.get('/healthz', (_req, res) => {
   const payload = { status: 'ok', uptime: process.uptime() }
@@ -93,6 +134,7 @@ app.post('/api/v1/auth/signup', async (req, res) => {
           organization: {
             create: {
               name: organizationName,
+              defaultCurrency: 'CAD',
             },
           },
         },
@@ -116,24 +158,28 @@ app.post('/api/v1/auth/signup', async (req, res) => {
         description: 'Seed round funding',
         amount: 150000,
         type: TransactionType.INCOME,
+        currency: membership.organization.defaultCurrency,
         occurredAt: new Date(baseDate.getTime() - 1000 * 60 * 60 * 24 * 40),
       },
       {
         description: 'Monthly payroll',
         amount: 52000,
         type: TransactionType.EXPENSE,
+        currency: membership.organization.defaultCurrency,
         occurredAt: new Date(baseDate.getTime() - 1000 * 60 * 60 * 24 * 20),
       },
       {
         description: 'Office rent',
         amount: 8000,
         type: TransactionType.EXPENSE,
+        currency: membership.organization.defaultCurrency,
         occurredAt: new Date(baseDate.getTime() - 1000 * 60 * 60 * 24 * 10),
       },
       {
         description: 'New client invoice',
         amount: 22000,
         type: TransactionType.INCOME,
+        currency: membership.organization.defaultCurrency,
         occurredAt: new Date(baseDate.getTime() - 1000 * 60 * 60 * 24 * 5),
       },
     ]
@@ -150,10 +196,13 @@ app.post('/api/v1/auth/signup', async (req, res) => {
     organizationId: membership.organizationId,
   })
 
+  const organizations = await getUserOrganizations(user.id)
+
   return res.json({
     token,
     user: { id: user.id, email: user.email },
     organization: membership.organization,
+    organizations,
   })
 })
 
@@ -188,10 +237,13 @@ app.post('/api/v1/auth/login', async (req, res) => {
     organizationId: membership.organizationId,
   })
 
+  const organizations = await getUserOrganizations(user.id)
+
   return res.json({
     token,
     user: { id: user.id, email: user.email },
     organization: org,
+    organizations,
   })
 })
 
@@ -204,11 +256,16 @@ app.get('/api/v1/auth/me', authenticate, async (req, res) => {
   const organization = await prisma.organization.findUnique({
     where: { id: auth.organizationId },
   })
-  res.json({ user, organization })
+  const organizations = await getUserOrganizations(auth.userId)
+  res.json({ user, organization, organizations })
 })
 
 app.get('/api/v1/summary', authenticate, async (req, res) => {
   const auth = req.auth!
+
+  const organization = await prisma.organization.findUnique({
+    where: { id: auth.organizationId },
+  })
 
   const transactions = await prisma.transaction.findMany({
     where: { organizationId: auth.organizationId },
@@ -248,6 +305,7 @@ app.get('/api/v1/summary', authenticate, async (req, res) => {
     cashOnHand: summaryRecord.cashOnHand,
     monthlyBurn: summaryRecord.monthlyBurn,
     runwayMonths: summaryRecord.runwayMonths,
+    currency: organization?.defaultCurrency ?? 'CAD',
     updatedAt: summaryRecord.updatedAt.toISOString(),
   })
   res.json(payload)
@@ -263,22 +321,68 @@ app.get('/api/v1/transactions', authenticate, async (req, res) => {
   res.json(transactions)
 })
 
+app.get('/api/v1/organizations', authenticate, async (req, res) => {
+  const organizations = await getUserOrganizations(req.auth!.userId)
+  res.json(organizations)
+})
+
 app.post('/api/v1/transactions', authenticate, async (req, res) => {
   const parsed = createTransactionSchema.safeParse(req.body)
   if (!parsed.success) {
     return res.status(400).json({ message: 'Invalid payload' })
   }
-  const { description, amount, type, occurredAt } = parsed.data
+  const { description, amount, type, occurredAt, currency } = parsed.data
+  const organization = await prisma.organization.findUnique({
+    where: { id: req.auth!.organizationId },
+  })
   const transaction = await prisma.transaction.create({
     data: {
       description,
       amount: Math.round(amount),
       type: type as TransactionType,
+      currency: (currency || organization?.defaultCurrency || 'CAD').toUpperCase(),
       occurredAt: occurredAt ? new Date(occurredAt) : new Date(),
       organizationId: req.auth!.organizationId,
     },
   })
   res.status(201).json(transaction)
+})
+
+app.post('/api/v1/session/organization', authenticate, async (req, res) => {
+  const parsed = switchOrganizationSchema.safeParse(req.body)
+  if (!parsed.success) {
+    return res.status(400).json({ message: 'Invalid payload' })
+  }
+  const { organizationId } = parsed.data
+  const membership = await prisma.membership.findFirst({
+    where: { userId: req.auth!.userId, organizationId },
+    include: { organization: true },
+  })
+  if (!membership) {
+    return res.status(403).json({ message: 'Access denied for organization' })
+  }
+  const token = generateToken({
+    userId: req.auth!.userId,
+    organizationId,
+  })
+  res.json({ token, organization: membership.organization })
+})
+
+app.post('/api/v1/organizations/reset', authenticate, async (req, res) => {
+  const parsed = resetOrganizationSchema.safeParse(req.body)
+  if (!parsed.success) {
+    return res.status(400).json({ message: 'Invalid payload' })
+  }
+  const { organizationId } = parsed.data
+  const membership = await prisma.membership.findFirst({
+    where: { organizationId, userId: req.auth!.userId },
+  })
+  if (!membership) {
+    return res.status(403).json({ message: 'Access denied for organization' })
+  }
+  await prisma.transaction.deleteMany({ where: { organizationId } })
+  await prisma.summary.deleteMany({ where: { organizationId } })
+  res.json({ success: true })
 })
 
 app.get('/api/v1/transactions/export', authenticate, async (req, res) => {
@@ -294,10 +398,16 @@ app.get('/api/v1/transactions/export', authenticate, async (req, res) => {
       ;(filters.occurredAt as { lte?: Date }).lte = new Date(to as string)
     }
   }
-  const transactions = await prisma.transaction.findMany({
-    where: filters,
-    orderBy: { occurredAt: 'asc' },
-  })
+  const [transactions, organization] = await Promise.all([
+    prisma.transaction.findMany({
+      where: filters,
+      orderBy: { occurredAt: 'asc' },
+    }),
+    prisma.organization.findUnique({
+      where: { id: auth.organizationId },
+      select: { name: true, defaultCurrency: true },
+    }),
+  ])
 
   res.setHeader('Content-Type', 'application/pdf')
   res.setHeader(
@@ -307,26 +417,58 @@ app.get('/api/v1/transactions/export', authenticate, async (req, res) => {
 
   const doc = new PDFDocument({ margin: 40 })
   doc.pipe(res)
-  doc.fontSize(18).text('Transaction Report', { align: 'center' })
-  doc.moveDown()
-  doc.fontSize(12)
-  transactions.forEach((transaction) => {
+  doc
+    .fontSize(18)
+    .text(`${organization?.name ?? 'MCGFinances'} transaction report`, {
+      align: 'center',
+    })
+  doc.moveDown(0.5)
+  if (from || to) {
     doc
-      .text(transaction.description, { continued: true })
-      .text(`  ${transaction.type}`, { continued: true })
+      .fontSize(11)
       .text(
-        `  ${new Intl.NumberFormat('en-US', {
-          style: 'currency',
-          currency: 'USD',
-          maximumFractionDigits: 0,
-        }).format(
-          transaction.type === 'EXPENSE'
-            ? -transaction.amount
-            : transaction.amount,
-        )}`,
-        { continued: true },
+        `Range: ${from ? new Date(from as string).toLocaleDateString() : 'Any'} → ${
+          to ? new Date(to as string).toLocaleDateString() : 'Any'
+        }`,
       )
-      .text(`  ${transaction.occurredAt.toDateString()}`)
+    doc.moveDown(0.5)
+  }
+
+  if (transactions.length === 0) {
+    doc.fontSize(12).text('No transactions found for the selected filters.', {
+      align: 'left',
+    })
+    doc.end()
+    return
+  }
+
+  doc.font('Helvetica-Bold').fontSize(12)
+  doc
+    .text('Description', { continued: true, width: 220 })
+    .text('Type', { continued: true, width: 70 })
+    .text('Currency', { continued: true, width: 80 })
+    .text('Amount', { continued: true, width: 120 })
+    .text('Date')
+  doc.moveDown(0.2)
+  const separatorY = doc.y
+  doc.moveTo(40, separatorY).lineTo(doc.page.width - 40, separatorY).stroke()
+  doc.moveDown(0.4)
+  doc.font('Helvetica')
+
+  transactions.forEach((transaction) => {
+    const signedAmount =
+      transaction.type === TransactionType.EXPENSE
+        ? -transaction.amount
+        : transaction.amount
+    doc
+      .text(transaction.description, { continued: true, width: 220 })
+      .text(transaction.type, { continued: true, width: 70 })
+      .text(transaction.currency, { continued: true, width: 80 })
+      .text(formatMoney(signedAmount, transaction.currency), {
+        continued: true,
+        width: 120,
+      })
+      .text(new Date(transaction.occurredAt).toDateString())
   })
   doc.end()
 })

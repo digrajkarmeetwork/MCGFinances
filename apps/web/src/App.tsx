@@ -6,6 +6,7 @@ type Summary = {
   cashOnHand: number
   monthlyBurn: number
   runwayMonths: number
+  currency: string
   updatedAt: string
 }
 
@@ -14,15 +15,39 @@ type Transaction = {
   description: string
   amount: number
   type: 'INCOME' | 'EXPENSE'
+  currency: string
   occurredAt: string
 }
 
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  }).format(value)
+type Organization = {
+  id: string
+  name: string
+  defaultCurrency: string
+}
+
+const normalizeCurrencyCode = (value?: string | null) => {
+  if (value && /^[A-Z]{3}$/i.test(value)) {
+    return value.toUpperCase()
+  }
+  return 'CAD'
+}
+
+const formatCurrency = (value: number, currency?: string) => {
+  const resolved = normalizeCurrencyCode(currency)
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: resolved,
+      maximumFractionDigits: 0,
+    }).format(value)
+  } catch {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      maximumFractionDigits: 0,
+    }).format(value)
+  }
+}
 
 const formatDate = (value: string) =>
   new Intl.DateTimeFormat('en-US', {
@@ -30,6 +55,8 @@ const formatDate = (value: string) =>
     day: 'numeric',
     year: 'numeric',
   }).format(new Date(value))
+
+const currencyOptions = ['CAD', 'USD', 'EUR', 'GBP', 'AUD', 'NZD']
 
 const resolveApiBase = () => {
   const envValue = (import.meta.env.VITE_API_URL as string | undefined)?.trim()
@@ -86,13 +113,15 @@ function App() {
   const [authBusy, setAuthBusy] = useState(false)
   const [profile, setProfile] = useState<{
     user: { id: string; email: string }
-    organization: { id: string; name: string }
+    organization: Organization
   } | null>(null)
+  const [organizations, setOrganizations] = useState<Organization[]>([])
   const [txForm, setTxForm] = useState({
     description: '',
     amount: '',
     type: 'EXPENSE' as 'INCOME' | 'EXPENSE',
     occurredAt: '',
+    currency: 'CAD',
   })
   const [exportRange, setExportRange] = useState({ from: '', to: '' })
   const [exportBusy, setExportBusy] = useState(false)
@@ -100,6 +129,18 @@ function App() {
   const [txBusy, setTxBusy] = useState(false)
 
   const apiBaseMemo = useMemo(() => resolveApiBase(), [])
+  const organizationCurrency = normalizeCurrencyCode(profile?.organization?.defaultCurrency)
+  const activeCurrency = summary ? normalizeCurrencyCode(summary.currency) : organizationCurrency
+  const formCurrencyLabel = normalizeCurrencyCode(txForm.currency || activeCurrency)
+
+  useEffect(() => {
+    if (profile?.organization?.defaultCurrency) {
+      setTxForm((prev) => ({
+        ...prev,
+        currency: normalizeCurrencyCode(profile.organization.defaultCurrency),
+      }))
+    }
+  }, [profile?.organization?.defaultCurrency])
 
   const buildUrl = useCallback(
     (path: string) => {
@@ -131,9 +172,11 @@ function App() {
       }
       const data = payload as {
         user: { id: string; email: string }
-        organization: { id: string; name: string }
+        organization: Organization
+        organizations?: Organization[]
       }
       setProfile(data)
+      setOrganizations(data.organizations ?? (data.organization ? [data.organization] : []))
     } catch (err) {
       setToken(null)
       window.localStorage.removeItem('mcgfinances.token')
@@ -184,7 +227,12 @@ function App() {
         throw new Error(extractError(payload, 'Unable to load transactions'))
       }
       if (Array.isArray(payload)) {
-        setTransactions(payload as Transaction[])
+        setTransactions(
+          (payload as Transaction[]).map((item) => ({
+            ...item,
+            currency: normalizeCurrencyCode(item.currency),
+          })),
+        )
       } else {
         throw new Error('Malformed transactions payload')
       }
@@ -223,11 +271,13 @@ function App() {
       const data = payload as {
         token: string
         user: { id: string; email: string }
-        organization: { id: string; name: string }
+        organization: Organization
+        organizations?: Organization[]
       }
       setToken(data.token)
       window.localStorage.setItem('mcgfinances.token', data.token)
       setProfile({ user: data.user, organization: data.organization })
+      setOrganizations(data.organizations ?? (data.organization ? [data.organization] : []))
       setAuthForm({ email: '', password: '', organizationName: '' })
       setAuthMode('login')
       loadSummary()
@@ -245,6 +295,34 @@ function App() {
     window.localStorage.removeItem('mcgfinances.token')
     setSummary(null)
     setTransactions([])
+    setOrganizations([])
+  }
+
+  const handleOrganizationChange = async (organizationId: string) => {
+    if (!token) return
+    try {
+      const response = await fetch(buildUrl('/api/v1/session/organization'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ organizationId }),
+      })
+      const payload = await readBody(response)
+      if (!response.ok) {
+        throw new Error(extractError(payload, 'Unable to switch organization'))
+      }
+      const data = payload as { token: string; organization: Organization }
+      setToken(data.token)
+      window.localStorage.setItem('mcgfinances.token', data.token)
+      setProfile((prev) => (prev ? { ...prev, organization: data.organization } : prev))
+      setTxError(null)
+      loadSummary()
+      loadTransactions()
+    } catch (err) {
+      setTxError(err instanceof Error ? err.message : 'Unable to switch organization')
+    }
   }
 
   const handleTransactionSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -258,6 +336,7 @@ function App() {
       const payloadBody = {
         description: txForm.description,
         amount: Number(txForm.amount),
+        currency: txForm.currency,
         type: txForm.type,
         occurredAt: txForm.occurredAt || undefined,
       }
@@ -275,7 +354,13 @@ function App() {
       }
       const transaction = payload as Transaction
       setTransactions((prev) => [transaction, ...prev].slice(0, 100))
-      setTxForm({ description: '', amount: '', type: 'EXPENSE', occurredAt: '' })
+      setTxForm({
+        description: '',
+        amount: '',
+        type: 'EXPENSE',
+        occurredAt: '',
+        currency: organizationCurrency,
+      })
       loadSummary()
     } catch (err) {
       setTxError(err instanceof Error ? err.message : 'Unable to save entry')
@@ -320,16 +405,47 @@ function App() {
     }
   }
 
- const kpiCards = summary
+  const handleResetData = async () => {
+    if (!token || !profile?.organization?.id) {
+      setTxError('Please log in to reset data.')
+      return
+    }
+    if (!confirm('This will permanently erase all transactions for this business. Continue?')) {
+      return
+    }
+    try {
+      setTxBusy(true)
+      const response = await fetch(buildUrl('/api/v1/organizations/reset'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ organizationId: profile.organization.id }),
+      })
+      const payload = await readBody(response)
+      if (!response.ok) {
+        throw new Error(extractError(payload, 'Unable to reset data'))
+      }
+      loadSummary()
+      loadTransactions()
+    } catch (err) {
+      setTxError(err instanceof Error ? err.message : 'Unable to reset data')
+    } finally {
+      setTxBusy(false)
+    }
+  }
+
+  const kpiCards = summary
     ? [
         {
-          label: 'Cash on hand',
-          value: formatCurrency(summary.cashOnHand),
+          label: `Cash on hand (${activeCurrency})`,
+          value: formatCurrency(summary.cashOnHand, activeCurrency),
           caption: 'Operating + savings',
         },
         {
-          label: 'Monthly burn',
-          value: formatCurrency(summary.monthlyBurn),
+          label: `Monthly burn (${activeCurrency})`,
+          value: formatCurrency(summary.monthlyBurn, activeCurrency),
           caption: 'Includes payroll + vendors',
         },
         {
@@ -343,21 +459,27 @@ function App() {
       ]
     : []
 
-  const transactionTotals = useMemo(
-    () =>
-      transactions.reduce(
-        (acc, transaction) => {
-          if (transaction.type === 'INCOME') {
-            acc.income += transaction.amount
-          } else {
-            acc.expense += transaction.amount
-          }
+  const transactionTotals = useMemo(() => {
+    if (!summary) {
+      return { income: 0, expense: 0 }
+    }
+    const normalized = normalizeCurrencyCode(summary.currency)
+    return transactions.reduce(
+      (acc, transaction) => {
+        const txCurrency = normalizeCurrencyCode(transaction.currency)
+        if (txCurrency !== normalized) {
           return acc
-        },
-        { income: 0, expense: 0 },
-      ),
-    [transactions],
-  )
+        }
+        if (transaction.type === 'INCOME') {
+          acc.income += transaction.amount
+        } else {
+          acc.expense += transaction.amount
+        }
+        return acc
+      },
+      { income: 0, expense: 0 },
+    )
+  }, [transactions, summary])
 
   return (
     <div className="shell">
@@ -371,6 +493,18 @@ function App() {
           <div className="nav__actions">
             {profile && profile.user ? (
               <>
+                {organizations.length > 1 && (
+                  <select
+                    value={profile.organization.id}
+                    onChange={(event) => handleOrganizationChange(event.target.value)}
+                  >
+                    {organizations.map((org) => (
+                      <option key={org.id} value={org.id}>
+                        {org.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 <span className="pill">{profile.user.email}</span>
                 <button className="ghost" onClick={handleLogout}>
                   Logout
@@ -392,7 +526,8 @@ function App() {
             <p className="eyebrow">Control Center</p>
             <h1>Financial health, crystal clear</h1>
             <p className="lead">
-              Monitor cash flow, runway, and spend drivers from one workspace.
+              Monitor cash flow, runway, and spend drivers for{' '}
+              <strong>{profile?.organization?.name || 'your business'}</strong> from one workspace.
               Perfect for founders and advisors on the move.
             </p>
           </div>
@@ -515,12 +650,12 @@ function App() {
                 <div className="totals">
                   <div>
                     <p>Incoming</p>
-                    <strong>{formatCurrency(transactionTotals.income)}</strong>
+                    <strong>{formatCurrency(transactionTotals.income, activeCurrency)}</strong>
                   </div>
                   <div>
                     <p>Outgoing</p>
                     <strong className="negative">
-                      {formatCurrency(transactionTotals.expense)}
+                      {formatCurrency(transactionTotals.expense, activeCurrency)}
                     </strong>
                   </div>
                 </div>
@@ -544,7 +679,10 @@ function App() {
                         }`}
                       >
                         {item.type === 'EXPENSE' ? '-' : '+'}
-                        {formatCurrency(item.amount)}
+                        {formatCurrency(
+                          item.amount,
+                          item.currency || activeCurrency,
+                        )}
                       </span>
                     </li>
                   ))}
@@ -561,7 +699,7 @@ function App() {
               <div>
                 <h2>Advisor notes</h2>
                 <p>
-                  Stay under {formatCurrency(summary.monthlyBurn)} in monthly
+                  Stay under {formatCurrency(summary.monthlyBurn, activeCurrency)} in monthly
                   burn to preserve {summary.runwayMonths.toFixed(1)} months of
                   runway. Review discretionary spend weekly and flag anomalies.
                 </p>
@@ -587,7 +725,7 @@ function App() {
                 </label>
                 <div className="form-row">
                   <label>
-                    <span>Amount (USD)</span>
+                    <span>Amount ({formCurrencyLabel})</span>
                     <input
                       required
                       type="number"
@@ -600,6 +738,24 @@ function App() {
                         }))
                       }
                     />
+                  </label>
+                  <label>
+                    <span>Currency</span>
+                    <select
+                      value={txForm.currency}
+                      onChange={(event) =>
+                        setTxForm((prev) => ({
+                          ...prev,
+                          currency: event.target.value,
+                        }))
+                      }
+                    >
+                      {currencyOptions.map((currency) => (
+                        <option key={currency} value={currency}>
+                          {currency}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                   <label>
                     <span>Type</span>
@@ -632,10 +788,18 @@ function App() {
                 </div>
                 {txError && <p className="auth-error">{txError}</p>}
                 <p className="helper-text">
-                  All amounts are saved in USD. Leave date empty to use today.
+                  Amounts are saved in the selected currency. Leave date empty to use today.
                 </p>
                 <button className="primary" type="submit" disabled={txBusy}>
                   {txBusy ? 'Saving…' : 'Add transaction'}
+                </button>
+                <button
+                  type="button"
+                  className="ghost danger"
+                  onClick={handleResetData}
+                  disabled={txBusy}
+                >
+                  Reset business data
                 </button>
               </form>
             </section>
@@ -683,6 +847,7 @@ function App() {
                     <tr>
                       <th>Description</th>
                       <th>Date</th>
+                      <th>Currency</th>
                       <th>Type</th>
                       <th>Amount</th>
                     </tr>
@@ -692,6 +857,7 @@ function App() {
                       <tr key={transaction.id}>
                         <td>{transaction.description}</td>
                         <td>{formatDate(transaction.occurredAt)}</td>
+                        <td>{transaction.currency || activeCurrency}</td>
                         <td>{transaction.type}</td>
                         <td
                           className={
@@ -701,7 +867,10 @@ function App() {
                           }
                         >
                           {transaction.type === 'EXPENSE' ? '-' : '+'}
-                          {formatCurrency(transaction.amount)}
+                          {formatCurrency(
+                            transaction.amount,
+                            transaction.currency || activeCurrency,
+                          )}
                         </td>
                       </tr>
                     ))}

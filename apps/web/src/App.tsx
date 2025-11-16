@@ -695,18 +695,6 @@ function App() {
               </article>
             </section>
 
-            <section className="panel advisory">
-              <div>
-                <h2>Advisor notes</h2>
-                <p>
-                  Stay under {formatCurrency(summary.monthlyBurn, activeCurrency)} in monthly
-                  burn to preserve {summary.runwayMonths.toFixed(1)} months of
-                  runway. Review discretionary spend weekly and flag anomalies.
-                </p>
-              </div>
-              <button className="ghost">Share report</button>
-            </section>
-
             <section className="panel transaction-form">
               <h2>Log new activity</h2>
               <form onSubmit={handleTransactionSubmit}>

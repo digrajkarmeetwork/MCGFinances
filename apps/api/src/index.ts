@@ -387,7 +387,7 @@ app.post('/api/v1/organizations/reset', authenticate, async (req, res) => {
 
 app.get('/api/v1/transactions/export', authenticate, async (req, res) => {
   const auth = req.auth!
-  const { from, to } = req.query
+  const { from, to, format } = req.query
   const filters: Record<string, unknown> = { organizationId: auth.organizationId }
   if (from || to) {
     filters.occurredAt = {}
@@ -409,17 +409,58 @@ app.get('/api/v1/transactions/export', authenticate, async (req, res) => {
     }),
   ])
 
+  const orgName = organization?.name ?? 'MCGFinances'
+  const filenameBase = `${orgName.replace(/\\s+/g, '_').toLowerCase()}_transactions`
+
+  // CSV export
+  if ((format as string)?.toLowerCase() === 'csv') {
+    res.setHeader('Content-Type', 'text/csv')
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${filenameBase}.csv"`,
+    )
+    const header = ['Description', 'Type', 'Currency', 'Amount', 'Date']
+    const rows = transactions.map((transaction) => [
+      transaction.description,
+      transaction.type,
+      transaction.currency,
+      formatMoney(
+        transaction.type === TransactionType.EXPENSE
+          ? -transaction.amount
+          : transaction.amount,
+        transaction.currency,
+      ),
+      new Date(transaction.occurredAt).toISOString().split('T')[0],
+    ])
+    const body = [header, ...rows]
+      .map((cols) =>
+        cols
+          .map((col) => {
+            const value = String(col ?? '')
+            return value.match(/[\",\\n]/)
+              ? `"${value.replace(/\"/g, '\"\"')}"`
+              : value
+          })
+          .join(','),
+      )
+      .join('\\n')
+
+    res.send(body)
+    return
+  }
+
+  // PDF export
   res.setHeader('Content-Type', 'application/pdf')
   res.setHeader(
     'Content-Disposition',
-    'attachment; filename="transactions.pdf"',
+    `attachment; filename="${filenameBase}.pdf"`,
   )
 
   const doc = new PDFDocument({ margin: 40 })
   doc.pipe(res)
   doc
     .fontSize(18)
-    .text(`${organization?.name ?? 'MCGFinances'} transaction report`, {
+    .text(`${orgName} · Transaction report`, {
       align: 'center',
     })
   doc.moveDown(0.5)
@@ -430,7 +471,7 @@ app.get('/api/v1/transactions/export', authenticate, async (req, res) => {
         `Range: ${from ? new Date(from as string).toLocaleDateString() : 'Any'} → ${
           to ? new Date(to as string).toLocaleDateString() : 'Any'
         }`,
-      )
+        )
     doc.moveDown(0.5)
   }
 
@@ -443,32 +484,43 @@ app.get('/api/v1/transactions/export', authenticate, async (req, res) => {
   }
 
   doc.font('Helvetica-Bold').fontSize(12)
-  doc
-    .text('Description', { continued: true, width: 220 })
-    .text('Type', { continued: true, width: 70 })
-    .text('Currency', { continued: true, width: 80 })
-    .text('Amount', { continued: true, width: 120 })
-    .text('Date')
-  doc.moveDown(0.2)
+  doc.text('Description', 40, doc.y, { width: 210 })
+  doc.text('Type', 255, doc.y, { width: 60 })
+  doc.text('Currency', 325, doc.y, { width: 70 })
+  doc.text('Amount', 405, doc.y, { width: 120, align: 'right' })
+  doc.text('Date', 535, doc.y, { width: 70, align: 'right' })
+
+  doc.moveDown(0.4)
   const separatorY = doc.y
   doc.moveTo(40, separatorY).lineTo(doc.page.width - 40, separatorY).stroke()
   doc.moveDown(0.4)
-  doc.font('Helvetica')
+  doc.font('Helvetica').fontSize(11)
 
   transactions.forEach((transaction) => {
     const signedAmount =
       transaction.type === TransactionType.EXPENSE
         ? -transaction.amount
         : transaction.amount
+    const nextY = doc.y + 4
+    doc.text(transaction.description, 40, nextY, { width: 210 })
+    doc.text(transaction.type, 255, nextY, { width: 60 })
+    doc.text(transaction.currency, 325, nextY, { width: 70 })
+    doc.text(formatMoney(signedAmount, transaction.currency), 405, nextY, {
+      width: 120,
+      align: 'right',
+    })
+    doc.text(new Date(transaction.occurredAt).toLocaleDateString(), 535, nextY, {
+      width: 70,
+      align: 'right',
+    })
+    doc.moveDown(0.4)
     doc
-      .text(transaction.description, { continued: true, width: 220 })
-      .text(transaction.type, { continued: true, width: 70 })
-      .text(transaction.currency, { continued: true, width: 80 })
-      .text(formatMoney(signedAmount, transaction.currency), {
-        continued: true,
-        width: 120,
-      })
-      .text(new Date(transaction.occurredAt).toDateString())
+      .moveTo(40, doc.y)
+      .lineTo(doc.page.width - 40, doc.y)
+      .strokeColor('#e2e8f0')
+      .stroke()
+      .strokeColor('#000000')
+    doc.moveDown(0.2)
   })
   doc.end()
 })

@@ -170,15 +170,6 @@ body {
   transition: opacity 120ms ease, transform 120ms ease;
 }
 
-.refresh:disabled {
-  opacity: 0.6;
-  cursor: wait;
-}
-
-.refresh:not(:disabled):hover {
-  transform: translateY(-1px);
-}
-
 .panel {
   background: #fff;
   border-radius: 20px;

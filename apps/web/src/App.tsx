@@ -531,11 +531,6 @@ function App() {
               Perfect for founders and advisors on the move.
             </p>
           </div>
-          {profile && (
-            <button className="refresh" onClick={loadSummary} disabled={loading}>
-              {loading ? 'Refreshing…' : 'Refresh data'}
-            </button>
-          )}
         </header>
 
         {!profile?.user && (

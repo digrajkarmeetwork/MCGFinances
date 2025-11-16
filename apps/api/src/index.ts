@@ -5,6 +5,7 @@ import morgan from 'morgan'
 import dotenv from 'dotenv'
 import { z } from 'zod'
 import bcrypt from 'bcryptjs'
+import PDFDocument from 'pdfkit'
 import { TransactionType } from '@prisma/client'
 import { prisma } from './prisma.js'
 import { authenticate, generateToken } from './auth.js'
@@ -278,6 +279,56 @@ app.post('/api/v1/transactions', authenticate, async (req, res) => {
     },
   })
   res.status(201).json(transaction)
+})
+
+app.get('/api/v1/transactions/export', authenticate, async (req, res) => {
+  const auth = req.auth!
+  const { from, to } = req.query
+  const filters: Record<string, unknown> = { organizationId: auth.organizationId }
+  if (from || to) {
+    filters.occurredAt = {}
+    if (from) {
+      ;(filters.occurredAt as { gte?: Date }).gte = new Date(from as string)
+    }
+    if (to) {
+      ;(filters.occurredAt as { lte?: Date }).lte = new Date(to as string)
+    }
+  }
+  const transactions = await prisma.transaction.findMany({
+    where: filters,
+    orderBy: { occurredAt: 'asc' },
+  })
+
+  res.setHeader('Content-Type', 'application/pdf')
+  res.setHeader(
+    'Content-Disposition',
+    'attachment; filename="transactions.pdf"',
+  )
+
+  const doc = new PDFDocument({ margin: 40 })
+  doc.pipe(res)
+  doc.fontSize(18).text('Transaction Report', { align: 'center' })
+  doc.moveDown()
+  doc.fontSize(12)
+  transactions.forEach((transaction) => {
+    doc
+      .text(transaction.description, { continued: true })
+      .text(`  ${transaction.type}`, { continued: true })
+      .text(
+        `  ${new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD',
+          maximumFractionDigits: 0,
+        }).format(
+          transaction.type === 'EXPENSE'
+            ? -transaction.amount
+            : transaction.amount,
+        )}`,
+        { continued: true },
+      )
+      .text(`  ${transaction.occurredAt.toDateString()}`)
+  })
+  doc.end()
 })
 
 app.listen(port, () => {

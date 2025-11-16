@@ -448,6 +448,20 @@ body {
   border-collapse: collapse;
 }
 
+.export-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.export-controls input {
+  border: 1px solid rgba(15, 23, 42, 0.15);
+  border-radius: 10px;
+  padding: 0.35rem 0.75rem;
+  font-family: inherit;
+}
+
 .transactions-table th,
 .transactions-table td {
   text-align: left;

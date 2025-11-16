@@ -94,6 +94,8 @@ function App() {
     type: 'EXPENSE' as 'INCOME' | 'EXPENSE',
     occurredAt: '',
   })
+  const [exportRange, setExportRange] = useState({ from: '', to: '' })
+  const [exportBusy, setExportBusy] = useState(false)
   const [txError, setTxError] = useState<string | null>(null)
   const [txBusy, setTxBusy] = useState(false)
 
@@ -279,6 +281,42 @@ function App() {
       setTxError(err instanceof Error ? err.message : 'Unable to save entry')
     } finally {
       setTxBusy(false)
+    }
+  }
+
+  const handleExport = async () => {
+    if (!token) {
+      setTxError('Please log in to export data.')
+      return
+    }
+    try {
+      setExportBusy(true)
+      const params = new URLSearchParams()
+      if (exportRange.from) params.append('from', exportRange.from)
+      if (exportRange.to) params.append('to', exportRange.to)
+      const response = await fetch(
+        buildUrl(`/api/v1/transactions/export?${params.toString()}`),
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      )
+      if (!response.ok) {
+        const payload = await readBody(response)
+        throw new Error(extractError(payload, 'Failed to export transactions'))
+      }
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = 'transactions.pdf'
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setTxError(err instanceof Error ? err.message : 'Unable to export data')
+    } finally {
+      setExportBusy(false)
     }
   }
 
@@ -605,7 +643,39 @@ function App() {
             <section className="panel transactions-table">
               <div className="panel__header">
                 <h2>All activity</h2>
-                <span>{transactions.length} entries</span>
+                <div className="export-controls">
+                  <input
+                    type="date"
+                    value={exportRange.from}
+                    onChange={(event) =>
+                      setExportRange((prev) => ({
+                        ...prev,
+                        from: event.target.value,
+                      }))
+                    }
+                    placeholder="From"
+                  />
+                  <input
+                    type="date"
+                    value={exportRange.to}
+                    onChange={(event) =>
+                      setExportRange((prev) => ({
+                        ...prev,
+                        to: event.target.value,
+                      }))
+                    }
+                    placeholder="To"
+                  />
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={handleExport}
+                    disabled={exportBusy}
+                  >
+                    {exportBusy ? 'Exporting…' : 'Export PDF'}
+                  </button>
+                  <span>{transactions.length} entries</span>
+                </div>
               </div>
               <div className="table-wrapper">
                 <table>

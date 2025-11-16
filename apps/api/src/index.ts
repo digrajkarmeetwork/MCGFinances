@@ -16,7 +16,7 @@ const app = express()
 app.use(express.json())
 const allowedOrigins = (
   process.env.ALLOWED_ORIGINS ||
-  'https://mcgfinances-vfeu.onrender.com,http://localhost:4173'
+  'https://mcgfinances-vfeu.onrender.com,http://localhost:4173,http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173'
 )
   .split(',')
   .map((origin) => origin.trim())

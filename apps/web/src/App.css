@@ -422,6 +422,21 @@ body {
   padding: 0.75rem 1rem;
   font-family: inherit;
   font-size: 1rem;
+  background: #f8fafc;
+}
+
+.transaction-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: #475569;
+}
+
+.transaction-form .helper-text {
+  color: #94a3b8;
+  font-size: 0.8rem;
+  margin-top: -0.25rem;
 }
 
 .transactions-table .table-wrapper {

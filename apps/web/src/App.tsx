@@ -593,6 +593,9 @@ function App() {
                   </label>
                 </div>
                 {txError && <p className="auth-error">{txError}</p>}
+                <p className="helper-text">
+                  All amounts are saved in USD. Leave date empty to use today.
+                </p>
                 <button className="primary" type="submit" disabled={txBusy}>
                   {txBusy ? 'Saving…' : 'Add transaction'}
                 </button>

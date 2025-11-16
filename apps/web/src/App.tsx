@@ -369,7 +369,7 @@ function App() {
     }
   }
 
-  const handleExport = async () => {
+  const handleExport = async (format: 'pdf' | 'csv' = 'pdf') => {
     if (!token) {
       setTxError('Please log in to export data.')
       return
@@ -379,6 +379,7 @@ function App() {
       const params = new URLSearchParams()
       if (exportRange.from) params.append('from', exportRange.from)
       if (exportRange.to) params.append('to', exportRange.to)
+      if (format) params.append('format', format)
       const response = await fetch(
         buildUrl(`/api/v1/transactions/export?${params.toString()}`),
         {
@@ -393,7 +394,7 @@ function App() {
       const url = URL.createObjectURL(blob)
       const anchor = document.createElement('a')
       anchor.href = url
-      anchor.download = 'transactions.pdf'
+      anchor.download = format === 'csv' ? 'transactions.csv' : 'transactions.pdf'
       document.body.appendChild(anchor)
       anchor.click()
       anchor.remove()
@@ -813,15 +814,25 @@ function App() {
                     }
                     placeholder="To"
                   />
-                  <button
-                    type="button"
-                    className="ghost"
-                    onClick={handleExport}
-                    disabled={exportBusy}
-                  >
-                    {exportBusy ? 'Exporting…' : 'Export PDF'}
-                  </button>
-                  <span>{transactions.length} entries</span>
+                  <div className="export-actions">
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() => handleExport('pdf')}
+                      disabled={exportBusy}
+                    >
+                      {exportBusy ? 'Exporting…' : 'Export PDF'}
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() => handleExport('csv')}
+                      disabled={exportBusy}
+                    >
+                      {exportBusy ? 'Exporting…' : 'Export CSV'}
+                    </button>
+                    <span>{transactions.length} entries</span>
+                  </div>
                 </div>
               </div>
               <div className="table-wrapper">

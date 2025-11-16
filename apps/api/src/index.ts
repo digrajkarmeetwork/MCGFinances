@@ -88,6 +88,222 @@ const getUserOrganizations = async (userId: string) => {
   return formatOrgSummary(memberships)
 }
 
+const buildTransactionFilename = (orgName: string, format: 'pdf' | 'csv') =>
+  `${orgName.replace(/\s+/g, '_').toLowerCase()}_transactions.${format}`
+
+const writeCsv = (
+  res: express.Response,
+  filename: string,
+  transactions: Awaited<ReturnType<typeof prisma.transaction.findMany>>,
+) => {
+  res.setHeader('Content-Type', 'text/csv')
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+  const header = ['Description', 'Type', 'Currency', 'Amount', 'Date']
+  const rows = transactions.map((transaction) => [
+    transaction.description,
+    transaction.type,
+    transaction.currency,
+    formatMoney(
+      transaction.type === TransactionType.EXPENSE
+        ? -transaction.amount
+        : transaction.amount,
+      transaction.currency,
+    ),
+    new Date(transaction.occurredAt).toISOString().split('T')[0],
+  ])
+  const body = [header, ...rows]
+    .map((cols) =>
+      cols
+        .map((col) => {
+          const value = String(col ?? '')
+          return value.match(/[",\n]/) ? `"${value.replace(/"/g, '""')}"` : value
+        })
+        .join(','),
+    )
+    .join('\n')
+  res.send(body)
+}
+
+const writePdf = (
+  res: express.Response,
+  orgName: string,
+  transactions: Awaited<ReturnType<typeof prisma.transaction.findMany>>,
+  options: { from?: string; to?: string; currency: string },
+) => {
+  res.setHeader('Content-Type', 'application/pdf')
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename="${buildTransactionFilename(orgName, 'pdf')}"`,
+  )
+
+  const doc = new PDFDocument({
+    margin: 50,
+    size: 'LETTER',
+    info: { Title: `${orgName} · Transaction report` },
+  })
+  doc.pipe(res)
+
+  // Header
+  doc.font('Helvetica-Bold').fontSize(18).text(`${orgName} · Transaction report`, {
+    align: 'left',
+  })
+  doc.moveDown(0.3)
+  doc
+    .font('Helvetica')
+    .fontSize(11)
+    .fillColor('#475569')
+    .text(
+      `Currency: ${options.currency} · Entries: ${transactions.length} · Generated: ${new Date().toLocaleString()}`,
+    )
+  if (options.from || options.to) {
+    doc.text(
+      `Range: ${options.from ? new Date(options.from).toLocaleDateString() : 'Any'} → ${
+        options.to ? new Date(options.to).toLocaleDateString() : 'Any'
+      }`,
+    )
+  }
+
+  doc.moveDown(0.75)
+  doc.fillColor('#0f172a')
+
+  const col = {
+    description: 40,
+    type: 290,
+    currency: 360,
+    amount: 440,
+    date: 520,
+  }
+
+  // Table header
+  doc.font('Helvetica-Bold').fontSize(11)
+  doc.text('Description', col.description, doc.y, { width: 220 })
+  doc.text('Type', col.type, doc.y, { width: 60 })
+  doc.text('Currency', col.currency, doc.y, { width: 70 })
+  doc.text('Amount', col.amount, doc.y, { width: 90, align: 'right' })
+  doc.text('Date', col.date, doc.y, { width: 70, align: 'right' })
+
+  doc.moveDown(0.4)
+  const headerBottom = doc.y
+  doc
+    .strokeColor('#e2e8f0')
+    .moveTo(col.description, headerBottom)
+    .lineTo(560, headerBottom)
+    .stroke()
+  doc.strokeColor('#000000')
+  doc.moveDown(0.2)
+  doc.font('Helvetica').fontSize(10.5)
+
+  const totals = transactions.reduce(
+    (acc, t) => {
+      if (t.type === TransactionType.EXPENSE) acc.expense += t.amount
+      else acc.income += t.amount
+      return acc
+    },
+    { income: 0, expense: 0 },
+  )
+
+  // Rows with zebra striping
+  transactions.forEach((transaction, index) => {
+    const rowY = doc.y + 2
+    if (index % 2 === 0) {
+      doc
+        .rect(col.description, rowY - 2, 520 - col.description, 16)
+        .fillOpacity(0.05)
+        .fill('#6366f1')
+        .fillOpacity(1)
+    }
+    const signedAmount =
+      transaction.type === TransactionType.EXPENSE
+        ? -transaction.amount
+        : transaction.amount
+    doc.fillColor('#0f172a')
+    doc.text(transaction.description, col.description, rowY, {
+      width: 220,
+      lineBreak: false,
+    })
+    doc.text(transaction.type, col.type, rowY, { width: 60 })
+    doc.text(transaction.currency, col.currency, rowY, { width: 70 })
+    doc.text(formatMoney(signedAmount, transaction.currency), col.amount, rowY, {
+      width: 90,
+      align: 'right',
+    })
+    doc.text(new Date(transaction.occurredAt).toLocaleDateString(), col.date, rowY, {
+      width: 70,
+      align: 'right',
+    })
+    doc.moveDown(1)
+  })
+
+  // Totals summary
+  doc.moveDown(0.5)
+  doc
+    .strokeColor('#e2e8f0')
+    .moveTo(col.description, doc.y)
+    .lineTo(560, doc.y)
+    .stroke()
+  doc.strokeColor('#000000')
+  doc.moveDown(0.4)
+  doc.font('Helvetica-Bold').fontSize(11).text('Totals', col.description, doc.y)
+  doc.font('Helvetica')
+    .text(`Income: ${formatMoney(totals.income, options.currency)}`, col.amount, doc.y, {
+      width: 150,
+      align: 'right',
+    })
+  doc.moveDown(0.2)
+  doc.text(`Expenses: ${formatMoney(-totals.expense, options.currency)}`, col.amount, doc.y, {
+    width: 150,
+    align: 'right',
+  })
+  doc.moveDown(0.2)
+  doc.font('Helvetica-Bold').text(
+    `Net: ${formatMoney(totals.income - totals.expense, options.currency)}`,
+    col.amount,
+    doc.y,
+    {
+      width: 150,
+      align: 'right',
+    },
+  )
+  doc.end()
+}
+
+app.get('/api/v1/transactions/export', authenticate, async (req, res) => {
+  const auth = req.auth!
+  const { from, to, format } = req.query
+  const filters: Record<string, unknown> = { organizationId: auth.organizationId }
+  if (from || to) {
+    filters.occurredAt = {}
+    if (from) {
+      ;(filters.occurredAt as { gte?: Date }).gte = new Date(from as string)
+    }
+    if (to) {
+      ;(filters.occurredAt as { lte?: Date }).lte = new Date(to as string)
+    }
+  }
+  const [transactions, organization] = await Promise.all([
+    prisma.transaction.findMany({
+      where: filters,
+      orderBy: { occurredAt: 'asc' },
+    }),
+    prisma.organization.findUnique({
+      where: { id: auth.organizationId },
+      select: { name: true, defaultCurrency: true },
+    }),
+  ])
+
+  const orgName = organization?.name ?? 'MCGFinances'
+
+  if ((format as string)?.toLowerCase() === 'csv') {
+    writeCsv(res, buildTransactionFilename(orgName, 'csv'), transactions)
+    return
+  }
+
+  writePdf(res, orgName, transactions, {
+    currency: organization?.defaultCurrency ?? 'CAD',
+    from: from as string | undefined,
+    to: to as string | undefined,
+  })
+})
 const formatMoney = (value: number, currency: string) => {
   try {
     return new Intl.NumberFormat('en-US', {

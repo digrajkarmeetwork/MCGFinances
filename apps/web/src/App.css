@@ -438,12 +438,22 @@ body {
 
 .transaction-form input,
 .transaction-form select {
-  border: 1px solid rgba(15, 23, 42, 0.15);
+  border: 1px solid #e2e8f0;
   border-radius: 12px;
   padding: 0.75rem 1rem;
   font-family: inherit;
   font-size: 1rem;
-  background: #f8fafc;
+  background: #fff;
+  color: #0f172a;
+  pointer-events: auto;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.transaction-form input:focus,
+.transaction-form select:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
 }
 
 .transaction-form label {
